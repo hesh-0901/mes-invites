@@ -6,10 +6,48 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email_verified == true;
     }
 
+    function userProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasProfile() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
     function isSuperAdmin() {
-      return signedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.super_admin == true;
+      return hasProfile() && userProfile().super_admin == true;
+    }
+
+    function isProjectAdmin(projectId) {
+      return hasProfile()
+        && userProfile().role == 'admin'
+        && userProfile().status == 'approved'
+        && userProfile().projectId == projectId;
+    }
+
+    function activeProject(projectId) {
+      return exists(/databases/$(database)/documents/projects/$(projectId))
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.status == 'active';
+    }
+
+    match /projects/{projectId} {
+      allow create: if isSuperAdmin()
+        && request.resource.data.id == projectId
+        && request.resource.data.ownerUid is string
+        && request.resource.data.status == 'active';
+      allow read: if signedIn() && (
+        isSuperAdmin()
+        || (resource.data.ownerUid == request.auth.uid)
+        || isProjectAdmin(projectId)
+        || (hasProfile() && userProfile().role == 'collaborator'
+          && userProfile().status == 'approved'
+          && userProfile().projectId == projectId)
+        || (hasProfile() && userProfile().role == 'collaborator'
+          && userProfile().status == 'pending'
+          && userProfile().projectId == projectId)
+      );
+      allow update: if isSuperAdmin();
+      allow delete: if isSuperAdmin();
     }
 
     match /users/{userId} {
@@ -17,14 +55,20 @@ service cloud.firestore {
         && request.auth.uid == userId
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.super_admin == false
-        && request.resource.data.role == 'admin'
         && request.resource.data.status == 'pending'
-        && request.resource.data.projectId == null;
+        && (
+          (request.resource.data.role == 'admin' && request.resource.data.projectId == null)
+          || (request.resource.data.role == 'collaborator'
+            && request.resource.data.projectId is string
+            && activeProject(request.resource.data.projectId))
+        );
 
-      allow read: if signedIn() && (request.auth.uid == userId || isSuperAdmin());
+      allow read: if signedIn() && (
+        request.auth.uid == userId
+        || isSuperAdmin()
+        || (resource.data.projectId is string && isProjectAdmin(resource.data.projectId))
+      );
 
-      // A user may update personal fields, but cannot promote their own role,
-      // approve their account, assign a project, or grant super-admin rights.
       allow update: if signedIn() && (
         (request.auth.uid == userId
           && request.resource.data.uid == resource.data.uid
@@ -33,12 +77,19 @@ service cloud.firestore {
           && request.resource.data.status == resource.data.status
           && request.resource.data.projectId == resource.data.projectId)
         || isSuperAdmin()
+        || (resource.data.role == 'collaborator'
+          && resource.data.status == 'pending'
+          && isProjectAdmin(resource.data.projectId)
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.projectId == resource.data.projectId
+          && request.resource.data.super_admin == false
+          && request.resource.data.status in ['approved', 'rejected'])
       );
       allow delete: if isSuperAdmin();
     }
 
-    // Legacy unscoped collections remain blocked until project-scoped migration
-    // is deployed. This prevents accidental cross-project data exposure.
+    // Legacy unscoped collections remain blocked until project-scoped migration.
     match /tables/{documentId} { allow read, write: if false; }
     match /guests/{documentId} { allow read, write: if false; }
     match /checkins/{documentId} { allow read, write: if false; }
