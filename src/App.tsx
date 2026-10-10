@@ -367,13 +367,20 @@ export default function App() {
       ctx.fillText(guest.displayName, width * templateNameX / 100, height * templateNameY / 100, width * templateNameWidth / 100);
       ctx.shadowBlur = 0;
       const qrSvg = renderToStaticMarkup(<QRCodeSVG value={guest.token} size={512} level="H" includeMargin />);
-      const qrUrl = URL.createObjectURL(new Blob([qrSvg], { type: 'image/svg+xml;charset=utf-8' }));
+      // SVG images loaded by Image() need an explicit SVG namespace in some browsers.
+      const compatibleQrSvg = qrSvg.includes('xmlns="http://www.w3.org/2000/svg"')
+        ? qrSvg
+        : qrSvg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
+      if (!compatibleQrSvg.includes('<svg') || !compatibleQrSvg.includes('</svg>')) {
+        throw new Error('Le générateur a produit un QR code SVG invalide.');
+      }
+      const qrUrl = URL.createObjectURL(new Blob([compatibleQrSvg], { type: 'image/svg+xml;charset=utf-8' }));
       try {
         const qrImage = new Image();
         qrImage.src = qrUrl;
         await new Promise<void>((resolve, reject) => {
           qrImage.onload = () => resolve();
-          qrImage.onerror = () => reject(new Error('Impossible de créer le QR code.'));
+          qrImage.onerror = () => reject(new Error('Le navigateur ne parvient pas à lire le QR code SVG. Réessaie après actualisation de la page.'));
         });
         const qrSize = width * templateQrSize / 100;
         ctx.fillStyle = '#ffffff';
