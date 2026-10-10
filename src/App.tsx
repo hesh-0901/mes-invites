@@ -85,6 +85,7 @@ export default function App() {
       }
     });
   }, []);
+  const projectId = typeof currentProfile?.projectId === 'string' ? currentProfile.projectId : null;
   const [page, setPage] = useState<Page>('dashboard');
   const [tables, setTables] = useState<GuestTable[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
@@ -161,10 +162,10 @@ export default function App() {
     const loadCloudData = async () => {
       try {
         const [cloudTables, cloudGuests, cloudCheckins, cloudSettings] = await Promise.all([
-          loadCollection<GuestTable>(FIRESTORE_COLLECTIONS.tables),
-          loadCollection<Guest>(FIRESTORE_COLLECTIONS.guests),
-          loadCollection<Checkin>(FIRESTORE_COLLECTIONS.checkins),
-          loadCollection<{ id: string; imageUrl?: string; nameX?: number; nameY?: number; qrX?: number; qrY?: number; qrSize?: number; nameSize?: number; nameWidth?: number; nameColor?: string; nameFont?: string; nameEffect?: string; locked?: boolean }>(FIRESTORE_COLLECTIONS.settings),
+          loadCollection<GuestTable>(projectId!, FIRESTORE_COLLECTIONS.tables),
+          loadCollection<Guest>(projectId!, FIRESTORE_COLLECTIONS.guests),
+          loadCollection<Checkin>(projectId!, FIRESTORE_COLLECTIONS.checkins),
+          loadCollection<{ id: string; imageUrl?: string; nameX?: number; nameY?: number; qrX?: number; qrY?: number; qrSize?: number; nameSize?: number; nameWidth?: number; nameColor?: string; nameFont?: string; nameEffect?: string; locked?: boolean }>(projectId!, FIRESTORE_COLLECTIONS.settings),
         ]);
         if (cancelled) return;
         setTables(cloudTables);
@@ -190,9 +191,9 @@ export default function App() {
         // The local demo remains usable without exposing records publicly.
       }
     };
-    if (firebaseConfigured) void loadCloudData();
+    if (firebaseConfigured && authUser?.emailVerified && accessState === 'approved' && projectId) void loadCloudData();
     return () => { cancelled = true; };
-  }, []);
+  }, [authUser, accessState, projectId]);
 
   useEffect(() => {
     if (!toast) return;
@@ -231,7 +232,7 @@ export default function App() {
     }
     const table: GuestTable = { id: makeId('table'), name, description: newTableDescription.trim(), createdAt: new Date().toISOString() };
     setTables((current) => [...current, table]);
-    void saveTableRecord(table).catch(() => undefined);
+    void saveTableRecord(projectId!, table).catch(() => undefined);
     setNewTableName('');
     setNewTableDescription('');
     setTableModal(false);
@@ -256,7 +257,7 @@ export default function App() {
     }
     const updated = { ...editingTable, name, description: editTableDescription.trim() };
     setTables((current) => current.map((item) => item.id === editingTable.id ? updated : item));
-    void saveTableRecord(updated).catch(() => notify('La table a été modifiée localement, mais la synchronisation a échoué.', 'error'));
+    void saveTableRecord(projectId!, updated).catch(() => notify('La table a été modifiée localement, mais la synchronisation a échoué.', 'error'));
     setEditingTable(null);
     setActiveTableId(null);
     setPage('tables');
@@ -298,7 +299,7 @@ export default function App() {
     if (editingGuest) {
       const updated = { ...editingGuest, name: cleanName, salutation, kind, displayName };
       setGuests((current) => current.map((guest) => guest.id === editingGuest.id ? updated : guest));
-      void saveGuestRecord(updated).catch(() => undefined);
+      void saveGuestRecord(projectId!, updated).catch(() => undefined);
       setDetailGuest(updated);
       notify('Fiche invité mise à jour.');
     } else {
@@ -307,7 +308,7 @@ export default function App() {
         createdAt: new Date().toISOString(), invitationStatus: 'not-generated', checkinStatus: 'not-checked-in',
       };
       setGuests((current) => [guest, ...current]);
-      void saveGuestRecord(guest).catch(() => undefined);
+      void saveGuestRecord(projectId!, guest).catch(() => undefined);
       notify('Invité ajouté à la table.');
     }
     setGuestModal(false);
@@ -324,7 +325,7 @@ export default function App() {
     if (!guest) return;
     const updated = { ...guest, invitationStatus: 'generated' as const, token: guest.token ?? `MESINVITES-${globalThis.crypto?.randomUUID?.() ?? makeId('invite')}` };
     setGuests((current) => current.map((item) => item.id === guestId ? updated : item));
-    void saveGuestRecord(updated).catch(() => undefined);
+    void saveGuestRecord(projectId!, updated).catch(() => undefined);
     setDetailGuest(updated);
     notify('QR code unique généré. Tu peux télécharger l’invitation personnalisée.');
   };
@@ -338,7 +339,7 @@ export default function App() {
       setScanValue(code);
       const entry: Checkin = { id: makeId('scan'), guestId: guest?.id ?? '', guestName: guest?.displayName ?? 'Invitation inconnue', tableName: tables.find((table) => table.id === guest?.tableId)?.name ?? '—', result: 'invalid', timestamp: new Date().toISOString(), operator: 'Accueil — démonstration' };
       setCheckins((current) => [entry, ...current]);
-      void saveCheckinRecord(entry).catch(() => undefined);
+      void saveCheckinRecord(projectId!, entry).catch(() => undefined);
       return;
     }
     setScanValue(code);
@@ -346,7 +347,7 @@ export default function App() {
       setScanResult({ state: 'used', guest, message: 'Cette invitation a déjà été utilisée.' });
       const entry: Checkin = { id: makeId('scan'), guestId: guest.id, guestName: guest.displayName, tableName: tables.find((table) => table.id === guest.tableId)?.name ?? '—', result: 'already-used', timestamp: new Date().toISOString(), operator: 'Accueil — démonstration' };
       setCheckins((current) => [entry, ...current]);
-      void saveCheckinRecord(entry).catch(() => undefined);
+      void saveCheckinRecord(projectId!, entry).catch(() => undefined);
       return;
     }
     const timestamp = new Date().toISOString();
@@ -354,7 +355,7 @@ export default function App() {
     const tableName = tables.find((table) => table.id === guest.tableId)?.name ?? '—';
     const entry: Checkin = { id: makeId('checkin'), guestId: guest.id, guestName: guest.displayName, tableName, result: 'accepted', timestamp, operator: 'Accueil — démonstration' };
     setCheckins((current) => [entry, ...current]);
-    void saveCheckinRecord(entry).catch(() => undefined);
+    void saveCheckinRecord(projectId!, entry).catch(() => undefined);
     void saveGuestRecord({ ...guest, checkinStatus: 'checked-in', checkedInAt: timestamp }).catch(() => undefined);
     setScanResult({ state: 'valid', guest: { ...guest, checkinStatus: 'checked-in', checkedInAt: timestamp }, message: 'Entrée enregistrée en mode démonstration.' });
     notify('Entrée enregistrée dans les données de démonstration.', 'success');
@@ -396,13 +397,13 @@ export default function App() {
     if (deleteConfirmation.type === 'table') {
       const table = deleteConfirmation.item;
       setTables((current) => current.filter((item) => item.id !== table.id));
-      void deleteRecord(FIRESTORE_COLLECTIONS.tables, table.id).catch(() => notify('La suppression locale est faite, mais la synchronisation a échoué.', 'error'));
+      void deleteRecord(projectId!, FIRESTORE_COLLECTIONS.tables, table.id).catch(() => notify('La suppression locale est faite, mais la synchronisation a échoué.', 'error'));
       if (activeTableId === table.id) setActiveTableId(null);
       notify('Table supprimée.', 'info');
     } else {
       const guest = deleteConfirmation.item;
       setGuests((current) => current.filter((item) => item.id !== guest.id));
-      void deleteRecord(FIRESTORE_COLLECTIONS.guests, guest.id).catch(() => notify('La suppression locale est faite, mais la synchronisation a échoué.', 'error'));
+      void deleteRecord(projectId!, FIRESTORE_COLLECTIONS.guests, guest.id).catch(() => notify('La suppression locale est faite, mais la synchronisation a échoué.', 'error'));
       setDetailGuest(null);
       notify('Invité supprimé.', 'info');
     }
@@ -626,7 +627,7 @@ export default function App() {
       window.localStorage.setItem('mes-invites-template-name-font', templateNameFont);
       window.localStorage.setItem('mes-invites-template-name-effect', templateNameEffect);
       window.localStorage.setItem('mes-invites-template-locked', 'true');
-      void saveRecord(FIRESTORE_COLLECTIONS.settings, { id: 'template', imageUrl: templateImage, nameX: templateNameX, nameY: templateNameY, qrX: templateQrX, qrY: templateQrY, qrSize: templateQrSize, nameSize: templateNameSize, nameWidth: templateNameWidth, nameColor: templateNameColor, nameFont: templateNameFont, nameEffect: templateNameEffect, locked: true, updatedAt: new Date().toISOString() }).catch(() => undefined);
+      void saveRecord(projectId!, FIRESTORE_COLLECTIONS.settings, { id: 'template', imageUrl: templateImage, nameX: templateNameX, nameY: templateNameY, qrX: templateQrX, qrY: templateQrY, qrSize: templateQrSize, nameSize: templateNameSize, nameWidth: templateNameWidth, nameColor: templateNameColor, nameFont: templateNameFont, nameEffect: templateNameEffect, locked: true, updatedAt: new Date().toISOString() }).catch(() => undefined);
       setTemplateLocked(true);
       notify('Modèle enregistré. Éditeur verrouillé.');
     } catch { notify('Impossible d’enregistrer les paramètres du template.', 'error'); }
