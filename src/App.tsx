@@ -708,7 +708,8 @@ export default function App() {
     setRequestsLoading(true);
     try {
       const snapshot = await getDocs(collection(firestore, 'users'));
-      setAdminRequests(snapshot.docs.map((entry) => ({ ...entry.data(), uid: entry.id })).filter((entry) => entry.super_admin !== true && entry.status === 'pending'));
+      const requests: Record<string, unknown>[] = snapshot.docs.map((entry) => ({ ...entry.data(), uid: entry.id }));
+      setAdminRequests(requests.filter((entry) => entry.super_admin !== true && entry.status === 'pending'));
     } catch {
       notify('Impossible de charger les demandes. Vérifie les règles Firestore publiées.', 'error');
     } finally { setRequestsLoading(false); }
