@@ -205,7 +205,7 @@ export default function App() {
         // The local demo remains usable without exposing records publicly.
       }
     };
-    if (firebaseConfigured && authUser && (authUser.isAnonymous || authUser.emailVerified) && accessState === 'approved' && projectId) void loadCloudData();
+    if (firebaseConfigured && authUser && (authUser.isAnonymous || authUser.emailVerified || currentProfile?.role === 'collaborator') && accessState === 'approved' && projectId) void loadCloudData();
     return () => { cancelled = true; };
   }, [authUser, accessState, projectId]);
 
