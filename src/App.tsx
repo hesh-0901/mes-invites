@@ -13,7 +13,6 @@ import { auth, firebaseConfigured, firestore } from './firebase';
 import { createUserWithEmailAndPassword, onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { deleteRecord, FIRESTORE_COLLECTIONS, loadCollection, saveCheckinRecord, saveGuestRecord, saveRecord, saveTableRecord } from './firestoreData';
-import { initialCheckins, initialGuests, initialTables } from './data';
 import type { Checkin, Guest, GuestTable, InvitationKind, Salutation } from './types';
 
 type Page = 'dashboard' | 'tables' | 'guests' | 'invitations' | 'templates' | 'scanner' | 'history' | 'settings';
@@ -58,9 +57,9 @@ export default function App() {
     return onAuthStateChanged(auth, (user) => { setAuthUser(user?.emailVerified ? user : null); setAuthReady(true); });
   }, []);
   const [page, setPage] = useState<Page>('dashboard');
-  const [tables, setTables] = useState<GuestTable[]>(initialTables);
-  const [guests, setGuests] = useState<Guest[]>(initialGuests);
-  const [checkins, setCheckins] = useState<Checkin[]>(initialCheckins);
+  const [tables, setTables] = useState<GuestTable[]>([]);
+  const [guests, setGuests] = useState<Guest[]>([]);
+  const [checkins, setCheckins] = useState<Checkin[]>([]);
   const [activeTableId, setActiveTableId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [toast, setToast] = useState<Toast | null>(null);
@@ -139,9 +138,9 @@ export default function App() {
           loadCollection<{ id: string; imageUrl?: string; nameX?: number; nameY?: number; qrX?: number; qrY?: number; qrSize?: number; nameSize?: number; nameWidth?: number; nameColor?: string; nameFont?: string; nameEffect?: string; locked?: boolean }>(FIRESTORE_COLLECTIONS.settings),
         ]);
         if (cancelled) return;
-        if (cloudTables.length) setTables(cloudTables);
-        if (cloudGuests.length) setGuests(cloudGuests);
-        if (cloudCheckins.length) setCheckins(cloudCheckins);
+        setTables(cloudTables);
+        setGuests(cloudGuests);
+        setCheckins(cloudCheckins);
         const templateSettings = cloudSettings.find((item) => item.id === 'template');
         if (templateSettings) {
           if (templateSettings.imageUrl) { setTemplateImage(templateSettings.imageUrl); window.localStorage.setItem('mes-invites-template-image', templateSettings.imageUrl); }
