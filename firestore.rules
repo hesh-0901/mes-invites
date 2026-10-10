@@ -11,7 +11,7 @@ service cloud.firestore {
     }
 
     function hasProfile() {
-      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      return request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
     function isSuperAdmin() {
@@ -19,7 +19,7 @@ service cloud.firestore {
     }
 
     function isProjectAdmin(projectId) {
-      return hasProfile()
+      return signedIn() && hasProfile()
         && userProfile().role == 'admin'
         && userProfile().status == 'approved'
         && userProfile().projectId == projectId;
@@ -63,11 +63,11 @@ service cloud.firestore {
             && activeProject(request.resource.data.projectId))
         );
 
-      allow read: if signedIn() && (
+      allow read: if request.auth != null && request.auth.uid == userId || (signedIn() && (
         request.auth.uid == userId
         || isSuperAdmin()
         || (resource.data.projectId is string && isProjectAdmin(resource.data.projectId))
-      );
+      ));
 
       allow update: if signedIn() && (
         (request.auth.uid == userId
@@ -93,7 +93,7 @@ service cloud.firestore {
       return hasProfile()
         && userProfile().status == 'approved'
         && userProfile().projectId == projectId
-        && userProfile().role in ['admin', 'collaborator'];
+        && (userProfile().role == 'collaborator' || (signedIn() && userProfile().role == 'admin'));
     }
 
     match /projects/{projectId}/{collectionName}/{documentId} {
