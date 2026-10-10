@@ -10,6 +10,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Html5Qrcode } from 'html5-qrcode';
 import { firebaseConfigured } from './firebase';
+import { deleteRecord, FIRESTORE_COLLECTIONS, loadCollection, saveCheckinRecord, saveGuestRecord, saveTableRecord } from './firestoreData';
 import { initialCheckins, initialGuests, initialTables } from './data';
 import type { Checkin, Guest, GuestTable, InvitationKind, Salutation } from './types';
 
@@ -113,6 +114,28 @@ export default function App() {
     }
   }, [page]);
   useEffect(() => {
+    let cancelled = false;
+    const loadCloudData = async () => {
+      try {
+        const [cloudTables, cloudGuests, cloudCheckins] = await Promise.all([
+          loadCollection<GuestTable>(FIRESTORE_COLLECTIONS.tables),
+          loadCollection<Guest>(FIRESTORE_COLLECTIONS.guests),
+          loadCollection<Checkin>(FIRESTORE_COLLECTIONS.checkins),
+        ]);
+        if (cancelled) return;
+        if (cloudTables.length) setTables(cloudTables);
+        if (cloudGuests.length) setGuests(cloudGuests);
+        if (cloudCheckins.length) setCheckins(cloudCheckins);
+      } catch {
+        // Firestore remains locked until the authentication and rules phase.
+        // The local demo remains usable without exposing records publicly.
+      }
+    };
+    if (firebaseConfigured) void loadCloudData();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
     if (!toast) return;
     const timeout = window.setTimeout(() => setToast(null), 3600);
     return () => window.clearTimeout(timeout);
@@ -149,6 +172,7 @@ export default function App() {
     }
     const table: GuestTable = { id: makeId('table'), name, description: newTableDescription.trim(), createdAt: new Date().toISOString() };
     setTables((current) => [...current, table]);
+    void saveTableRecord(table).catch(() => undefined);
     setNewTableName('');
     setNewTableDescription('');
     setTableModal(false);
@@ -182,6 +206,7 @@ export default function App() {
     if (editingGuest) {
       const updated = { ...editingGuest, name: cleanName, salutation, kind, displayName };
       setGuests((current) => current.map((guest) => guest.id === editingGuest.id ? updated : guest));
+      void saveGuestRecord(updated).catch(() => undefined);
       setDetailGuest(updated);
       notify('Fiche invité mise à jour.');
     } else {
@@ -190,6 +215,7 @@ export default function App() {
         createdAt: new Date().toISOString(), invitationStatus: 'not-generated', checkinStatus: 'not-checked-in',
       };
       setGuests((current) => [guest, ...current]);
+      void saveGuestRecord(guest).catch(() => undefined);
       notify('Invité ajouté à la table.');
     }
     setGuestModal(false);
@@ -206,6 +232,7 @@ export default function App() {
     if (!guest) return;
     const updated = { ...guest, invitationStatus: 'generated' as const, token: guest.token ?? `MESINVITES-${globalThis.crypto?.randomUUID?.() ?? makeId('invite')}` };
     setGuests((current) => current.map((item) => item.id === guestId ? updated : item));
+    void saveGuestRecord(updated).catch(() => undefined);
     setDetailGuest(updated);
     notify('QR code unique généré. Tu peux télécharger l’invitation personnalisée.');
   };
@@ -260,6 +287,7 @@ export default function App() {
   const deleteGuest = (guest: Guest) => {
     if (!window.confirm(`Supprimer ${guest.displayName} des données de démonstration ?`)) return;
     setGuests((current) => current.filter((item) => item.id !== guest.id));
+    void deleteRecord(FIRESTORE_COLLECTIONS.guests, guest.id).catch(() => undefined);
     setDetailGuest(null);
     notify('Invité supprimé du prototype.', 'info');
   };
