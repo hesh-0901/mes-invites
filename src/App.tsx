@@ -77,6 +77,15 @@ export default function App() {
       try {
         const profileSnapshot = await getDoc(doc(firestore, 'users', user.uid));
         const profile = profileSnapshot.exists() ? profileSnapshot.data() : null;
+        // Anonymous users may be between authentication and profile creation.
+        // Do not strand them on the unavailable screen during this brief window.
+        if (!profile && user.isAnonymous) {
+          setCurrentProfile(null);
+          setIsSuperAdmin(false);
+          setAccessState('checking');
+          setAuthReady(true);
+          return;
+        }
         setCurrentProfile(profile);
         setIsSuperAdmin(profile?.super_admin === true);
         setAccessState(profile?.super_admin === true || profile?.status === 'approved'
