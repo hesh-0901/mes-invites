@@ -76,6 +76,7 @@ export default function App() {
   const [templateNameWidth, setTemplateNameWidth] = useState(() => Number(window.localStorage.getItem('mes-invites-template-name-width') ?? 60));
   const [templateImageDimensions, setTemplateImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const [templateSampleName, setTemplateSampleName] = useState('Nom de l’invité');
+  const [templateLocked, setTemplateLocked] = useState(() => window.localStorage.getItem('mes-invites-template-locked') === 'true');
 
   useEffect(() => {
     if (!templateImage) { setTemplateImageDimensions(null); return; }
@@ -411,7 +412,9 @@ export default function App() {
       window.localStorage.setItem('mes-invites-template-qr-size', String(templateQrSize));
       window.localStorage.setItem('mes-invites-template-name-size', String(templateNameSize));
       window.localStorage.setItem('mes-invites-template-name-width', String(templateNameWidth));
-      notify('Positionnement du template enregistré sur cet appareil.');
+      window.localStorage.setItem('mes-invites-template-locked', 'true');
+      setTemplateLocked(true);
+      notify('Modèle enregistré. Éditeur verrouillé.');
     } catch { notify('Impossible d’enregistrer les paramètres du template.', 'error'); }
   };
 
@@ -441,21 +444,36 @@ export default function App() {
 
   const renderTemplates = () => (
     <>
-      <section className="welcome-row"><div><div className="eyebrow">PERSONNALISATION</div><h2>Templates d’invitation</h2><p>Importe ton visuel et règle précisément la position du nom et du QR code.</p></div><label className="button button-primary template-upload-button"><Plus size={16} /> Importer un template<input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => importTemplate(event.target.files?.[0])} /></label></section>
-      <section className="template-editor-grid">
-        <div className="panel template-controls">
-          <div className="panel-heading"><div><h3>Configuration du modèle</h3><p>Les positions sont exprimées en pourcentage du visuel.</p></div><Settings size={18} className="muted-icon" /></div>
-          <label className="template-field">Nom de prévisualisation<input value={templateSampleName} onChange={(event) => setTemplateSampleName(event.target.value)} placeholder="Nom de l’invité" /></label>
-          <div className="template-control-group"><strong>Position du nom</strong><label>Horizontal — {templateNameX}%<input type="range" min="0" max="100" value={templateNameX} onChange={(e) => setTemplateNameX(Number(e.target.value))} /></label><label>Vertical — {templateNameY}%<input type="range" min="0" max="100" value={templateNameY} onChange={(e) => setTemplateNameY(Number(e.target.value))} /></label><label>Taille maximale du texte — {templateNameSize}% de la largeur<input type="range" min="1" max="7" step="0.25" value={templateNameSize} onChange={(e) => setTemplateNameSize(Number(e.target.value))} /></label><label>Largeur réservée au nom — {templateNameWidth}%<input type="range" min="10" max="95" step="1" value={templateNameWidth} onChange={(e) => setTemplateNameWidth(Number(e.target.value))} /></label><small className="muted-copy">Les noms longs sont automatiquement réduits pour rester dans cette zone.</small></div>
-          <div className="template-control-group"><strong>Position du QR code</strong><label>Horizontal — {templateQrX}%<input type="range" min="0" max="100" value={templateQrX} onChange={(e) => setTemplateQrX(Number(e.target.value))} /></label><label>Vertical — {templateQrY}%<input type="range" min="0" max="100" value={templateQrY} onChange={(e) => setTemplateQrY(Number(e.target.value))} /></label><label>Taille — {templateQrSize}% de la largeur<input type="range" min="6" max="28" step="1" value={templateQrSize} onChange={(e) => setTemplateQrSize(Number(e.target.value))} /></label></div>
-          <div className="modal-actions"><button className="button button-secondary" onClick={() => { setTemplateNameX(50); setTemplateNameY(55); setTemplateQrX(78); setTemplateQrY(82); setTemplateQrSize(14); setTemplateNameSize(3); setTemplateNameWidth(60); }}>Réinitialiser</button><button className="button button-primary" onClick={saveTemplateSettings}><Check size={16} /> Enregistrer</button></div>
-          <p className="muted-copy small-note"><LockKeyhole size={14} /> Le modèle et ses réglages sont enregistrés dans ce navigateur uniquement. Ils ne sont pas encore synchronisés dans le cloud.</p>
-        </div>
-        <div className="panel template-preview-panel"><div className="panel-heading"><div><h3>Aperçu en direct</h3><p>Exemple de placement du nom et du QR code.</p></div><Eye size={18} className="muted-icon" /></div>
-          {templateImage ? <div className="template-live-preview" style={{ backgroundImage: `url("${templateImage}")`, aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4' }}><div className="template-preview-name" style={{ left: `${templateNameX}%`, top: `${templateNameY}%`, fontSize: `${templateNameSize}cqw`, maxWidth: `${templateNameWidth}%` }}>{templateSampleName || 'Nom de l’invité'}</div><div className="template-preview-qr" style={{ left: `${templateQrX}%`, top: `${templateQrY}%`, width: `${templateQrSize}%` }}><QRCodeSVG value="PREVIEW-QR-MES-INVITES" size={128} level="H" includeMargin /></div></div> : <div className="template-preview-empty"><FileImage size={34} /><strong>Importe ton modèle pour commencer</strong><span>Formats acceptés : PNG, JPG et WebP. L’aperçu conserve le ratio de l’image.</span></div>}
-          {templateImage && <button className="button button-danger-ghost" onClick={() => { window.localStorage.removeItem('mes-invites-template-image'); setTemplateImage(''); notify('Template retiré de cet appareil.', 'info'); }}><Trash2 size={15} /> Retirer ce template</button>}
-        </div>
-      </section>
+      {templateLocked && templateImage ? (
+        <section className="template-locked-workspace">
+          <div className="template-locked-topline"><span><LockKeyhole size={14} /> MODÈLE CONFIGURÉ</span><button className="template-edit-discreet" onClick={() => { setTemplateLocked(false); window.localStorage.setItem('mes-invites-template-locked', 'false'); }}><Pencil size={14} /> Modifier</button></div>
+          <div className="template-locked-canvas" style={{ aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4' }}>
+            <div className="template-live-preview" style={{ backgroundImage: `url("${templateImage}")`, aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4' }}>
+              <div className="template-preview-name" style={{ left: `${templateNameX}%`, top: `${templateNameY}%`, fontSize: `${templateNameSize}cqw`, maxWidth: `${templateNameWidth}%` }}>{templateSampleName || 'Nom de l’invité'}</div>
+              <div className="template-preview-qr" style={{ left: `${templateQrX}%`, top: `${templateQrY}%`, width: `${templateQrSize}%` }}><QRCodeSVG value="APERÇU-MODÈLE-MES-INVITES" size={128} level="H" includeMargin /></div>
+            </div>
+          </div>
+          <p className="template-locked-caption"><CheckCircle2 size={14} /> Le modèle est prêt pour générer les invitations.</p>
+        </section>
+      ) : (
+        <>
+          <section className="welcome-row"><div><div className="eyebrow">PERSONNALISATION</div><h2>Templates d’invitation</h2><p>Importe ton visuel, règle le nom et le QR code, puis enregistre pour verrouiller la configuration.</p></div><label className="button button-primary template-upload-button"><Plus size={16} /> Importer un template<input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => importTemplate(event.target.files?.[0])} /></label></section>
+          <section className="template-editor-grid">
+            <div className="panel template-controls">
+              <div className="panel-heading"><div><h3>Configuration du modèle</h3><p>Les positions sont exprimées en pourcentage du visuel.</p></div><Settings size={18} className="muted-icon" /></div>
+              <label className="template-field">Nom de prévisualisation<input value={templateSampleName} onChange={(event) => setTemplateSampleName(event.target.value)} placeholder="Nom de l’invité" /></label>
+              <div className="template-control-group"><strong>Position du nom</strong><label>Horizontal — {templateNameX}%<input type="range" min="0" max="100" value={templateNameX} onChange={(e) => setTemplateNameX(Number(e.target.value))} /></label><label>Vertical — {templateNameY}%<input type="range" min="0" max="100" value={templateNameY} onChange={(e) => setTemplateNameY(Number(e.target.value))} /></label><label>Taille maximale du texte — {templateNameSize}% de la largeur<input type="range" min="1" max="7" step="0.25" value={templateNameSize} onChange={(e) => setTemplateNameSize(Number(e.target.value))} /></label><label>Largeur réservée au nom — {templateNameWidth}%<input type="range" min="10" max="95" step="1" value={templateNameWidth} onChange={(e) => setTemplateNameWidth(Number(e.target.value))} /></label><small className="muted-copy">Les noms longs sont automatiquement réduits pour rester dans cette zone.</small></div>
+              <div className="template-control-group"><strong>Position du QR code</strong><label>Horizontal — {templateQrX}%<input type="range" min="0" max="100" value={templateQrX} onChange={(e) => setTemplateQrX(Number(e.target.value))} /></label><label>Vertical — {templateQrY}%<input type="range" min="0" max="100" value={templateQrY} onChange={(e) => setTemplateQrY(Number(e.target.value))} /></label><label>Taille — {templateQrSize}% de la largeur<input type="range" min="6" max="28" step="1" value={templateQrSize} onChange={(e) => setTemplateQrSize(Number(e.target.value))} /></label></div>
+              <div className="modal-actions"><button className="button button-secondary" onClick={() => { setTemplateNameX(50); setTemplateNameY(55); setTemplateQrX(78); setTemplateQrY(82); setTemplateQrSize(14); setTemplateNameSize(3); setTemplateNameWidth(60); }}>Réinitialiser</button><button className="button button-primary" onClick={saveTemplateSettings}><Check size={16} /> Enregistrer et verrouiller</button></div>
+              <p className="muted-copy small-note"><LockKeyhole size={14} /> Après l’enregistrement, les paramètres seront masqués. Utilise « Modifier » pour les afficher de nouveau.</p>
+            </div>
+            <div className="panel template-preview-panel"><div className="panel-heading"><div><h3>Aperçu en direct</h3><p>Exemple de placement du nom et du QR code.</p></div><Eye size={18} className="muted-icon" /></div>
+              {templateImage ? <div className="template-live-preview" style={{ backgroundImage: `url("${templateImage}")`, aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4' }}><div className="template-preview-name" style={{ left: `${templateNameX}%`, top: `${templateNameY}%`, fontSize: `${templateNameSize}cqw`, maxWidth: `${templateNameWidth}%` }}>{templateSampleName || 'Nom de l’invité'}</div><div className="template-preview-qr" style={{ left: `${templateQrX}%`, top: `${templateQrY}%`, width: `${templateQrSize}%` }}><QRCodeSVG value="PREVIEW-QR-MES-INVITES" size={128} level="H" includeMargin /></div></div> : <div className="template-preview-empty"><FileImage size={34} /><strong>Importe ton modèle pour commencer</strong><span>Formats acceptés : PNG, JPG et WebP. L’aperçu conserve le ratio de l’image.</span></div>}
+              {templateImage && <button className="button button-danger-ghost" onClick={() => { window.localStorage.removeItem('mes-invites-template-image'); window.localStorage.setItem('mes-invites-template-locked', 'false'); setTemplateLocked(false); setTemplateImage(''); notify('Template retiré de cet appareil.', 'info'); }}><Trash2 size={15} /> Retirer ce template</button>}
+            </div>
+          </section>
+        </>
+      )}
     </>
   );
 
