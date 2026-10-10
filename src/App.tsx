@@ -779,7 +779,8 @@ export default function App() {
 
 
 function AuthScreen() {
-  const [mode, setMode] = useState<'landing' | 'register' | 'login'>('landing');
+  const [mode, setMode] = useState<'landing' | 'register' | 'login' | 'collaborator'>('landing');
+  const [projectId, setProjectId] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
@@ -793,23 +794,37 @@ function AuthScreen() {
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setError(''); setMessage('');
     if (!auth || !firestore) { setError('Firebase n’est pas configuré.'); return; }
-    if (mode === 'register' && password !== confirmPassword) { setError('Les deux mots de passe ne correspondent pas.'); return; }
-    if (mode === 'register' && password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); return; }
+    if ((mode === 'register' || mode === 'collaborator') && password !== confirmPassword) { setError('Les deux mots de passe ne correspondent pas.'); return; }
+    if ((mode === 'register' || mode === 'collaborator') && password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); return; }
+    if (mode === 'collaborator' && !projectId.trim()) { setError('Saisis le code de ton espace.'); return; }
     setBusy(true);
     try {
-      if (mode === 'register') {
+      if (mode === 'register' || mode === 'collaborator') {
+        const normalizedProjectId = projectId.trim();
+        if (mode === 'collaborator') {
+          const projectSnapshot = await getDoc(doc(firestore, 'projects', normalizedProjectId));
+          if (!projectSnapshot.exists() || projectSnapshot.data().status !== 'active') {
+            setError('Ce code d’espace est introuvable ou inactif. Vérifie-le auprès de l’administrateur.');
+            return;
+          }
+        }
         const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
         const displayName = `${firstName.trim()} ${lastName.trim()}`.trim();
         await updateProfile(credential.user, { displayName });
         await setDoc(doc(firestore, 'users', credential.user.uid), {
           uid: credential.user.uid, firstName: firstName.trim(), lastName: lastName.trim(),
-          whatsapp: whatsapp.trim(), email: email.trim().toLowerCase(), role: 'admin', status: 'pending', super_admin: false, projectId: null, createdAt: new Date().toISOString(),
+          whatsapp: mode === 'register' ? whatsapp.trim() : '', email: email.trim().toLowerCase(),
+          role: mode === 'register' ? 'admin' : 'collaborator', status: 'pending',
+          super_admin: false, projectId: mode === 'register' ? null : normalizedProjectId,
+          createdAt: new Date().toISOString(),
         });
         await sendEmailVerification(credential.user);
         setVerificationPending(true);
-        setMessage('Demande de compte administrateur envoyée. Vérifie ton e-mail ; ton accès sera activé après approbation par le super administrateur.');
+        setMessage(mode === 'register'
+          ? 'Demande de compte administrateur envoyée. Vérifie ton e-mail ; ton accès sera activé après approbation par le super administrateur.'
+          : 'Demande de collaboration envoyée. Vérifie ton e-mail ; l’administrateur de cet espace devra ensuite approuver ton accès.');
         await signOut(auth);
-      } else {
+      }
         const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
         if (!credential.user.emailVerified) {
           await signOut(auth);
@@ -834,24 +849,25 @@ function AuthScreen() {
   };
   if (mode === 'landing') return <main className="landing-page">
     <header className="landing-nav"><button className="landing-brand" onClick={() => setMode('landing')}><span className="landing-brand-mark"><Heart size={22}/></span><span>mes invites<small>VOS MOMENTS, VOS INVITATIONS</small></span></button><div className="landing-nav-actions"><button className="landing-login-link" onClick={() => setMode('login')}>Se connecter</button><button className="button button-primary landing-nav-cta" onClick={() => setMode('register')}>Créer un espace <ArrowDownRight size={16}/></button></div></header>
-    <section className="landing-hero"><div className="landing-hero-copy"><span className="landing-eyebrow"><span/> L’ART DE RECEVOIR, SIMPLEMENT</span><h1>Vos invitations méritent une expérience <em>inoubliable.</em></h1><p>Créez de belles invitations personnalisées, organisez vos invités et accueillez chacun en toute sérénité. Tout votre événement, dans un seul espace.</p><div className="landing-hero-actions"><button className="button button-primary" onClick={() => setMode('register')}>Créer mon espace <ChevronRight size={17}/></button><button className="landing-secondary-action" onClick={() => setMode('login')}>J’ai déjà un compte</button></div><div className="landing-trust"><span><ShieldCheck size={16}/> Espace privé</span><span><CheckCircle2 size={16}/> Gestion simplifiée</span></div></div>
+    <section className="landing-hero"><div className="landing-hero-copy"><span className="landing-eyebrow"><span/> L’ART DE RECEVOIR, SIMPLEMENT</span><h1>Vos invitations méritent une expérience <em>inoubliable.</em></h1><p>Créez de belles invitations personnalisées, organisez vos invités et accueillez chacun en toute sérénité. Tout votre événement, dans un seul espace.</p><div className="landing-hero-actions"><button className="button button-primary" onClick={() => setMode('register')}>Créer mon espace <ChevronRight size={17}/></button><button className="landing-secondary-action" onClick={() => setMode('login')}>J’ai déjà un compte</button><button className="landing-secondary-action" onClick={() => { setMode('collaborator'); setError(''); setMessage(''); }}>Rejoindre un espace</button></div><div className="landing-trust"><span><ShieldCheck size={16}/> Espace privé</span><span><CheckCircle2 size={16}/> Gestion simplifiée</span></div></div>
       <div className="landing-visual" aria-label="Aperçu d’une invitation élégante"><div className="landing-orbit landing-orbit-one"/><div className="landing-orbit landing-orbit-two"/><div className="landing-invitation-card"><span className="landing-card-kicker">VOUS ÊTES CORDIALEMENT INVITÉ(E)</span><span className="landing-card-flourish"><Heart size={20}/></span><span className="landing-card-script">Une journée</span><strong>à célébrer</strong><span className="landing-card-line"/><span className="landing-card-date">AMOUR · JOIE · PARTAGE</span><span className="landing-card-monogram">M <i>&</i> I</span></div><div className="landing-float landing-float-qr"><QrCode size={21}/><span><b>QR code unique</b><small>Entrée simplifiée</small></span></div><div className="landing-float landing-float-guests"><Users size={20}/><span><b>Vos invités</b><small>Tout est organisé</small></span></div><span className="landing-spark landing-spark-a">✳</span><span className="landing-spark landing-spark-b">✦</span></div>
     </section>
     <section className="landing-benefits"><div className="landing-section-heading"><span className="landing-eyebrow">TOUT AU MÊME ENDROIT</span><h2>Moins d’organisation à gérer.<br/><em>Plus de moments à vivre.</em></h2></div><div className="landing-feature-grid"><article className="landing-feature"><span><Heart size={20}/></span><h3>Invitations personnalisées</h3><p>Adaptez votre modèle et préparez des invitations au nom de chaque invité.</p></article><article className="landing-feature"><span><Users size={20}/></span><h3>Invités bien organisés</h3><p>Répartissez les personnes par table et gardez vos listes faciles à gérer.</p></article><article className="landing-feature"><span><ScanLine size={20}/></span><h3>Accueil avec QR code</h3><p>Vérifiez les invitations à l’entrée et suivez les arrivées simplement.</p></article></div></section>
     <section className="landing-bottom-cta"><div><span className="landing-eyebrow">VOTRE ÉVÉNEMENT COMMENCE ICI</span><h2>Prêt à préparer votre réception ?</h2><p>Créez votre espace et rassemblez toute votre organisation au même endroit.</p></div><button className="button button-primary" onClick={() => setMode('register')}>Commencer maintenant <ChevronRight size={17}/></button></section>
     <footer className="landing-footer"><button className="landing-brand landing-footer-brand" onClick={() => setMode('landing')}><span className="landing-brand-mark"><Heart size={18}/></span><span>mes invites</span></button><span>© 2026 Mes Invites · Vos moments, en toute simplicité.</span><button className="landing-login-link" onClick={() => setMode('login')}>Accéder à mon espace</button></footer>
   </main>;
-  return <main className="auth-screen"><section className="auth-card"><div className="auth-brand"><span className="auth-mark"><Heart size={24}/></span><span>Mes Invites<small>Gestion élégante de vos invitations</small></span></div><div className="auth-intro"><span className="eyebrow">ESPACE PRIVÉ</span><h1>{mode === 'register' ? 'Créez votre compte' : 'Bon retour'}</h1><p>{mode === 'register' ? 'Inscrivez-vous pour préparer et gérer vos invitations.' : 'Connectez-vous pour accéder à votre espace.'}</p></div>
+  return <main className="auth-screen"><section className="auth-card"><div className="auth-brand"><span className="auth-mark"><Heart size={24}/></span><span>Mes Invites<small>Gestion élégante de vos invitations</small></span></div><div className="auth-intro"><span className="eyebrow">ESPACE PRIVÉ</span><h1>{mode === 'register' ? 'Créez votre compte' : mode === 'collaborator' ? 'Rejoindre un espace' : 'Bon retour'}</h1><p>{mode === 'register' ? 'Inscrivez-vous pour préparer et gérer vos invitations.' : mode === 'collaborator' ? 'Demandez l’accès à l’espace de votre administrateur.' : 'Connectez-vous pour accéder à votre espace.'}</p></div>
   <form className="form-stack auth-form" onSubmit={submit}>
-  {mode === 'register' && <div className="auth-name-grid"><label>Prénom<input autoComplete="given-name" value={firstName} onChange={e=>setFirstName(e.target.value)} required/></label><label>Nom<input autoComplete="family-name" value={lastName} onChange={e=>setLastName(e.target.value)} required/></label></div>}
+  {(mode === 'register' || mode === 'collaborator') && <div className="auth-name-grid"><label>Prénom<input autoComplete="given-name" value={firstName} onChange={e=>setFirstName(e.target.value)} required/></label><label>Nom<input autoComplete="family-name" value={lastName} onChange={e=>setLastName(e.target.value)} required/></label></div>}
   {mode === 'register' && <label>Numéro WhatsApp<input type="tel" autoComplete="tel" value={whatsapp} onChange={e=>setWhatsapp(e.target.value)} placeholder="+243…" required/></label>}
+  {mode === 'collaborator' && <label>Code de l’espace<input autoComplete="off" value={projectId} onChange={e=>setProjectId(e.target.value)} placeholder="Code fourni par l’administrateur" required /></label>}
   <label>Adresse e-mail<input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="vous@exemple.com" required/></label>
   <label>Mot de passe<input type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={e=>setPassword(e.target.value)} minLength={8} required/></label>
-  {mode === 'register' && <label>Confirmer le mot de passe<input type="password" autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} minLength={8} required/></label>}
+  {(mode === 'register' || mode === 'collaborator') && <label>Confirmer le mot de passe<input type="password" autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} minLength={8} required/></label>}
   {error && <p className="auth-alert auth-error" role="alert">{error}</p>}{message && <p className="auth-alert auth-success" role="status">{message}</p>}
   {verificationPending && mode === 'login' && <button className="button button-secondary auth-submit" disabled={busy} type="button" onClick={async()=>{if(!auth) return;setBusy(true);setError('');try{const credential=await signInWithEmailAndPassword(auth,email.trim(),password);await sendEmailVerification(credential.user);await signOut(auth);setMessage('Nouveau lien de vérification envoyé.');}catch(e){setError(e instanceof Error?e.message:'Impossible de renvoyer le lien.');}finally{setBusy(false);}}}>Renvoyer le lien de vérification</button>}
-  <button className="button button-primary auth-submit" disabled={busy} type="submit">{busy ? 'Patiente…' : mode === 'register' ? 'Créer mon compte' : 'Se connecter'}</button>
-  </form><p className="auth-switch">{mode === 'register' ? 'Vous avez déjà un compte ?' : 'Vous n’avez pas encore de compte ?'} <button type="button" onClick={()=>{setMode(mode === 'register' ? 'login' : 'register');setError('');setMessage('');}}>{mode === 'register' ? 'Se connecter' : 'Créer un compte'}</button></p><p className="auth-footnote"><ShieldCheck size={14}/> Vos informations sont protégées.</p></section></main>;
+  <button className="button button-primary auth-submit" disabled={busy} type="submit">{busy ? 'Patiente…' : mode === 'register' ? 'Créer mon compte administrateur' : mode === 'collaborator' ? 'Demander l’accès' : 'Se connecter'}</button>
+  </form><p className="auth-switch">{mode === 'register' || mode === 'collaborator' ? 'Vous avez déjà un compte ?' : 'Vous n’avez pas encore de compte ?'} <button type="button" onClick={()=>{setMode(mode === 'register' || mode === 'collaborator' ? 'login' : 'register');setError('');setMessage('');}}>{mode === 'register' || mode === 'collaborator' ? 'Se connecter' : 'Créer un compte administrateur'}</button></p><p className="auth-switch"><button type="button" onClick={()=>{setMode(mode === 'collaborator' ? 'register' : 'collaborator');setError('');setMessage('');}}>{mode === 'collaborator' ? 'Créer un espace administrateur' : 'Je suis collaborateur'}</button></p><p className="auth-footnote"><ShieldCheck size={14}/> Vos informations sont protégées.</p></section></main>;
 }
 
 function StatCard({ label, value, note, icon: Icon, trend }: { label: string; value: number; note?: string; icon: typeof Users; trend?: string }) {
