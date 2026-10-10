@@ -34,6 +34,18 @@ npm run dev
 
 Les paramètres du projet Firebase sont documentés dans `.env.example`. Vite peut également utiliser les valeurs publiques de configuration présentes dans `src/firebase.ts`.
 
+## Déploiement Cloudflare Pages
+
+Le dépôt est préparé pour un déploiement Cloudflare Pages à la racine du domaine :
+- Framework preset : **Vite**
+- Production branch : **main**
+- Build command : `npm run build`
+- Build output directory : `dist`
+- Root directory : laisser vide (racine du dépôt)
+- Runtime Node.js : version 20 ou supérieure
+
+Dans Cloudflare Dashboard : **Workers & Pages → Create → Pages → Connect to Git** puis sélectionner le dépôt `hesh-0901/mes-invites`. Après la première compilation réussie, chaque push sur `main` déclenchera un nouveau déploiement. Le fichier `public/_redirects` fournit le fallback SPA.
+
 ## État des fonctionnalités
 
 **Le frontend fonctionne en mode démonstration.** Les créations, modifications, scans et validations ne sont pas encore persistés dans Firestore. Les données initiales sont fictives et réinitialisées au rechargement.
@@ -48,6 +60,6 @@ Pour cette raison, `firestore.rules` et `storage.rules` refusent toutes les opé
 
 Ne pas utiliser le mode démonstration pour contrôler un événement réel.
 
-## Déploiement
+## Firebase
 
 Le fichier `firebase.json` référence les règles de sécurité. Ne les déployer qu'après avoir préparé le backend qui les remplacera ou les complétera avec une politique adaptée.
