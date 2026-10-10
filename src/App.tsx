@@ -11,7 +11,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { Html5Qrcode } from 'html5-qrcode';
 import { auth, firebaseConfigured, firestore } from './firebase';
 import { createUserWithEmailAndPassword, onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { deleteRecord, FIRESTORE_COLLECTIONS, loadCollection, saveCheckinRecord, saveGuestRecord, saveRecord, saveTableRecord } from './firestoreData';
 import type { Checkin, Guest, GuestTable, InvitationKind, Salutation } from './types';
 
@@ -52,9 +52,30 @@ function initials(name: string) {
 export default function App() {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [accessState, setAccessState] = useState<'checking' | 'approved' | 'pending' | 'rejected' | 'profile-error'>('checking');
   useEffect(() => {
     if (!auth) { setAuthReady(true); return; }
-    return onAuthStateChanged(auth, (user) => { setAuthUser(user?.emailVerified ? user : null); setAuthReady(true); });
+    return onAuthStateChanged(auth, async (user) => {
+      if (!user?.emailVerified || !firestore) {
+        setAuthUser(null);
+        setAccessState('checking');
+        setAuthReady(true);
+        return;
+      }
+      setAuthUser(user);
+      setAccessState('checking');
+      try {
+        const profileSnapshot = await getDoc(doc(firestore, 'users', user.uid));
+        const profile = profileSnapshot.exists() ? profileSnapshot.data() : null;
+        setAccessState(profile?.super_admin === true || profile?.status === 'approved'
+          ? 'approved'
+          : profile?.status === 'rejected' ? 'rejected' : profile ? 'pending' : 'profile-error');
+      } catch {
+        setAccessState('profile-error');
+      } finally {
+        setAuthReady(true);
+      }
+    });
   }, []);
   const [page, setPage] = useState<Page>('dashboard');
   const [tables, setTables] = useState<GuestTable[]>([]);
@@ -687,8 +708,9 @@ export default function App() {
     </>
   );
 
-  if (!authReady) return <div className="auth-loading">Chargement sécurisé…</div>;
+  if (!authReady || (authUser && accessState === 'checking')) return <div className="auth-loading">Chargement sécurisé…</div>;
   if (!authUser) return <AuthScreen />;
+  if (accessState !== 'approved') return <main className="auth-screen"><section className="auth-card"><div className="auth-brand"><span className="auth-mark"><ShieldCheck size={24}/></span><span>Mes Invites<small>CONTRÔLE DES ACCÈS</small></span></div><div className="auth-intro"><span className="eyebrow">ESPACE SÉCURISÉ</span><h1>{accessState === 'pending' ? 'Demande en attente' : accessState === 'rejected' ? 'Demande refusée' : 'Accès indisponible'}</h1><p>{accessState === 'pending' ? 'Ton adresse e-mail est vérifiée. Un super administrateur doit approuver ton compte avant que tu puisses accéder à ton espace.' : accessState === 'rejected' ? 'La demande d’accès à ce compte a été refusée. Contacte le support si tu penses qu’il s’agit d’une erreur.' : 'Le profil de ce compte ne peut pas être vérifié. Réessaie plus tard ou contacte le support.'}</p></div><button className="button button-secondary auth-submit" onClick={() => auth && void signOut(auth)}>Se déconnecter</button></section></main>;
 
   return (
     <div className="app-shell">
@@ -742,11 +764,11 @@ function AuthScreen() {
         await updateProfile(credential.user, { displayName });
         await setDoc(doc(firestore, 'users', credential.user.uid), {
           uid: credential.user.uid, firstName: firstName.trim(), lastName: lastName.trim(),
-          whatsapp: whatsapp.trim(), email: email.trim().toLowerCase(), createdAt: new Date().toISOString(),
+          whatsapp: whatsapp.trim(), email: email.trim().toLowerCase(), role: 'admin', status: 'pending', super_admin: false, projectId: null, createdAt: new Date().toISOString(),
         });
         await sendEmailVerification(credential.user);
         setVerificationPending(true);
-        setMessage('Compte créé. Consulte ta boîte mail et clique sur le lien de vérification avant de te connecter.');
+        setMessage('Demande de compte administrateur envoyée. Vérifie ton e-mail ; ton accès sera activé après approbation par le super administrateur.');
         await signOut(auth);
       } else {
         const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
