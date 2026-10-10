@@ -117,15 +117,28 @@ export default function App() {
     let cancelled = false;
     const loadCloudData = async () => {
       try {
-        const [cloudTables, cloudGuests, cloudCheckins] = await Promise.all([
+        const [cloudTables, cloudGuests, cloudCheckins, cloudSettings] = await Promise.all([
           loadCollection<GuestTable>(FIRESTORE_COLLECTIONS.tables),
           loadCollection<Guest>(FIRESTORE_COLLECTIONS.guests),
           loadCollection<Checkin>(FIRESTORE_COLLECTIONS.checkins),
+          loadCollection<{ id: string; imageUrl?: string; nameX?: number; nameY?: number; qrX?: number; qrY?: number; qrSize?: number; nameSize?: number; nameWidth?: number; locked?: boolean }>(FIRESTORE_COLLECTIONS.settings),
         ]);
         if (cancelled) return;
         if (cloudTables.length) setTables(cloudTables);
         if (cloudGuests.length) setGuests(cloudGuests);
         if (cloudCheckins.length) setCheckins(cloudCheckins);
+        const templateSettings = cloudSettings.find((item) => item.id === 'template');
+        if (templateSettings) {
+          if (templateSettings.imageUrl) { setTemplateImage(templateSettings.imageUrl); window.localStorage.setItem('mes-invites-template-image', templateSettings.imageUrl); }
+          if (typeof templateSettings.nameX === 'number') setTemplateNameX(templateSettings.nameX);
+          if (typeof templateSettings.nameY === 'number') setTemplateNameY(templateSettings.nameY);
+          if (typeof templateSettings.qrX === 'number') setTemplateQrX(templateSettings.qrX);
+          if (typeof templateSettings.qrY === 'number') setTemplateQrY(templateSettings.qrY);
+          if (typeof templateSettings.qrSize === 'number') setTemplateQrSize(templateSettings.qrSize);
+          if (typeof templateSettings.nameSize === 'number') setTemplateNameSize(templateSettings.nameSize);
+          if (typeof templateSettings.nameWidth === 'number') setTemplateNameWidth(templateSettings.nameWidth);
+          if (templateSettings.locked) setTemplateLocked(true);
+        }
       } catch {
         // Firestore remains locked until the authentication and rules phase.
         // The local demo remains usable without exposing records publicly.
