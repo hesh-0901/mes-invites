@@ -97,8 +97,8 @@ service cloud.firestore {
     }
 
     match /projects/{projectId}/{collectionName}/{documentId} {
-      allow read: if signedIn() && (isSuperAdmin() || isApprovedProjectMember(projectId));
-      allow create, update, delete: if signedIn() && (isSuperAdmin() || isApprovedProjectMember(projectId));
+      allow read: if request.auth != null && (isSuperAdmin() || isApprovedProjectMember(projectId));
+      allow create, update, delete: if request.auth != null && (isSuperAdmin() || isApprovedProjectMember(projectId));
     }
 
     // Legacy unscoped collections remain blocked until project-scoped migration.
