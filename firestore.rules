@@ -89,6 +89,18 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
+    function isApprovedProjectMember(projectId) {
+      return hasProfile()
+        && userProfile().status == 'approved'
+        && userProfile().projectId == projectId
+        && userProfile().role in ['admin', 'collaborator'];
+    }
+
+    match /projects/{projectId}/{collectionName}/{documentId} {
+      allow read: if signedIn() && (isSuperAdmin() || isApprovedProjectMember(projectId));
+      allow create, update, delete: if signedIn() && (isSuperAdmin() || isApprovedProjectMember(projectId));
+    }
+
     // Legacy unscoped collections remain blocked until project-scoped migration.
     match /tables/{documentId} { allow read, write: if false; }
     match /guests/{documentId} { allow read, write: if false; }
