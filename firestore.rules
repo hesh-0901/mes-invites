@@ -2,10 +2,25 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Mes Invites intentionally starts locked down.
-    // The application uses a custom password model without Firebase Auth,
-    // so client-side Firestore access must remain denied until a trusted
-    // server endpoint validates access and performs authorized operations.
+    // Chaque utilisateur peut accéder uniquement à son propre profil.
+    match /users/{userId} {
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.uid == request.auth.uid;
+      allow read, update: if request.auth != null
+        && request.auth.uid == userId
+        && resource.data.uid == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // Les données de l'événement restent fermées jusqu'à la mise en place
+    // de règles multi-utilisateur et d'un modèle de propriété des documents.
+    match /tables/{documentId} { allow read, write: if false; }
+    match /guests/{documentId} { allow read, write: if false; }
+    match /checkins/{documentId} { allow read, write: if false; }
+    match /eventSettings/{documentId} { allow read, write: if false; }
+
+    // Refus par défaut.
     match /{document=**} {
       allow read, write: if false;
     }
