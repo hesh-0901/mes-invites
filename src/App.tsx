@@ -54,6 +54,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [accessState, setAccessState] = useState<'checking' | 'approved' | 'pending' | 'rejected' | 'profile-error'>('checking');
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [currentProfile, setCurrentProfile] = useState<Record<string, unknown> | null>(null);
   const [adminRequests, setAdminRequests] = useState<Record<string, unknown>[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
   useEffect(() => {
@@ -61,6 +62,8 @@ export default function App() {
     return onAuthStateChanged(auth, async (user) => {
       if (!user?.emailVerified || !firestore) {
         setAuthUser(null);
+        setCurrentProfile(null);
+        setIsSuperAdmin(false);
         setAccessState('checking');
         setAuthReady(true);
         return;
@@ -70,6 +73,7 @@ export default function App() {
       try {
         const profileSnapshot = await getDoc(doc(firestore, 'users', user.uid));
         const profile = profileSnapshot.exists() ? profileSnapshot.data() : null;
+        setCurrentProfile(profile);
         setIsSuperAdmin(profile?.super_admin === true);
         setAccessState(profile?.super_admin === true || profile?.status === 'approved'
           ? 'approved'
@@ -704,23 +708,41 @@ export default function App() {
   );
 
   const loadAdminRequests = async () => {
-    if (!firestore || !isSuperAdmin) return;
+    if (!firestore || (!isSuperAdmin && currentProfile?.role !== 'admin')) return;
     setRequestsLoading(true);
     try {
       const snapshot = await getDocs(collection(firestore, 'users'));
       const requests: Record<string, unknown>[] = snapshot.docs.map((entry) => ({ ...entry.data(), uid: entry.id }));
-      setAdminRequests(requests.filter((entry) => entry.super_admin !== true && entry.status === 'pending'));
+      setAdminRequests(requests.filter((entry) => isSuperAdmin
+        ? entry.super_admin !== true && entry.role === 'admin' && entry.status === 'pending'
+        : entry.role === 'collaborator' && entry.projectId === currentProfile?.projectId && entry.status === 'pending'));
     } catch {
       notify('Impossible de charger les demandes. Vérifie les règles Firestore publiées.', 'error');
     } finally { setRequestsLoading(false); }
   };
 
   const decideAdminRequest = async (uid: string, status: 'approved' | 'rejected') => {
-    if (!firestore || !isSuperAdmin) return;
+    if (!firestore || (!isSuperAdmin && currentProfile?.role !== 'admin')) return;
     try {
-      await updateDoc(doc(firestore, 'users', uid), { status, reviewedAt: new Date().toISOString(), reviewedBy: authUser?.uid ?? null });
+      const requestSnapshot = await getDoc(doc(firestore, 'users', uid));
+      if (!requestSnapshot.exists()) throw new Error('Demande introuvable.');
+      const request = requestSnapshot.data();
+      if (isSuperAdmin && request.role === 'admin' && status === 'approved') {
+        const projectRef = doc(collection(firestore, 'projects'));
+        await setDoc(projectRef, {
+          id: projectRef.id, ownerUid: uid, ownerEmail: request.email ?? '',
+          name: `Espace de ${String(request.firstName ?? 'l’administrateur')} ${String(request.lastName ?? '')}`.trim(),
+          status: 'active', createdAt: new Date().toISOString(),
+        });
+        await updateDoc(doc(firestore, 'users', uid), { status, projectId: projectRef.id, reviewedAt: new Date().toISOString(), reviewedBy: authUser?.uid ?? null });
+      } else {
+        if (!isSuperAdmin && (request.role !== 'collaborator' || request.projectId !== currentProfile?.projectId)) {
+          throw new Error('Cette demande ne dépend pas de votre espace.');
+        }
+        await updateDoc(doc(firestore, 'users', uid), { status, reviewedAt: new Date().toISOString(), reviewedBy: authUser?.uid ?? null });
+      }
       setAdminRequests((current) => current.filter((entry) => entry.uid !== uid));
-      notify(status === 'approved' ? 'Compte administrateur approuvé.' : 'Demande refusée.', 'success');
+      notify(status === 'approved' ? (isSuperAdmin ? 'Compte administrateur approuvé et espace créé.' : 'Collaborateur approuvé.') : 'Demande refusée.', 'success');
     } catch {
       notify('La décision n’a pas pu être enregistrée. Vérifie les règles Firestore.', 'error');
     }
@@ -735,7 +757,7 @@ export default function App() {
         <button role="tab" aria-selected={settingsTab === 'general'} className={settingsTab === 'general' ? 'settings-tab active' : 'settings-tab'} onClick={() => setSettingsTab('general')}><Activity size={16}/> Général</button>
         <button role="tab" aria-selected={settingsTab === 'event'} className={settingsTab === 'event' ? 'settings-tab active' : 'settings-tab'} onClick={() => setSettingsTab('event')}><Heart size={16}/> Événement</button>
         <button role="tab" aria-selected={settingsTab === 'template'} className={settingsTab === 'template' ? 'settings-tab active' : 'settings-tab'} onClick={() => setSettingsTab('template')}><FileImage size={16}/> Invitations</button>
-        {isSuperAdmin && <button role="tab" aria-selected={settingsTab === 'access'} className={settingsTab === 'access' ? 'settings-tab active' : 'settings-tab'} onClick={() => setSettingsTab('access')}><ShieldCheck size={16}/> Accès & comptes</button>}
+        {(isSuperAdmin || currentProfile?.role === 'admin') && <button role="tab" aria-selected={settingsTab === 'access'} className={settingsTab === 'access' ? 'settings-tab active' : 'settings-tab'} onClick={() => { setSettingsTab('access'); void loadAdminRequests(); }}><ShieldCheck size={16}/> Accès & comptes</button>}
       </div>
       {settingsTab === 'general' && <section className="settings-grid">
         <div className="panel"><div className="panel-heading"><div><h3>État des services</h3><p>Connexion et configuration cloud</p></div><Activity size={19} className="muted-icon"/></div><div className="setting-row"><span className="setting-icon"><ShieldCheck size={18}/></span><div><strong>Firebase</strong><small>{firebaseConfigured ? 'Configuration détectée' : 'Variables VITE_FIREBASE_* absentes'}</small></div><span className={firebaseConfigured ? 'status-pill status-green' : 'status-pill status-amber'}><span className="status-dot"/>{firebaseConfigured ? 'Configuré' : 'À configurer'}</span></div><div className="notice notice-info setting-notice"><LockKeyhole size={18}/><div><strong>Accès sécurisé</strong><p>La connexion nécessite un e-mail vérifié et un compte approuvé.</p></div></div></div>
@@ -743,7 +765,7 @@ export default function App() {
       </section>}
       {settingsTab === 'event' && <section className="panel settings-detail-panel"><div className="panel-heading"><div><h3>Informations de l’événement</h3><p>Les détails de votre réception seront configurables ici.</p></div><Heart size={20} className="muted-icon"/></div><div className="event-placeholder"><span className="event-monogram">M<span>&</span>I</span><strong>Votre événement</strong><p>Le nom des mariés, la date, le lieu et les informations de contact seront regroupés dans cette section.</p><span className="status-pill status-neutral"><span className="status-dot"/>À configurer</span></div></section>}
       {settingsTab === 'template' && <section className="panel settings-detail-panel"><div className="panel-heading"><div><h3>Modèle d’invitation</h3><p>Gérez le visuel utilisé pour personnaliser vos invitations.</p></div><FileImage size={20} className="muted-icon"/></div><div className="settings-template-summary"><span className="setting-icon"><FileImage size={20}/></span><div><strong>{templateImage ? 'Un modèle est chargé' : 'Aucun modèle importé'}</strong><small>{templateImage ? 'Le modèle est prêt dans l’éditeur.' : 'Importez un PNG, JPG ou WebP dans Templates.'}</small></div></div><button className="button button-primary" onClick={() => navigate('templates')}><FileImage size={16}/> Ouvrir l’éditeur de templates</button></section>}
-      {settingsTab === 'access' && isSuperAdmin && <section className="panel"><div className="panel-heading"><div><h3>Demandes administrateur</h3><p>Approuvez ou refusez les demandes d’accès.</p></div><button className="button button-secondary" onClick={() => void loadAdminRequests()} disabled={requestsLoading}><Activity size={16}/>{requestsLoading ? 'Chargement…' : 'Actualiser'}</button></div>{requestsLoading ? <div className="empty-state">Chargement des demandes…</div> : adminRequests.length === 0 ? <div className="empty-state"><ShieldCheck size={28}/><strong>Aucune demande en attente</strong><span>Les nouvelles inscriptions apparaîtront ici.</span></div> : <div className="table-wrap"><table><thead><tr><th>Administrateur</th><th>E-mail</th><th>WhatsApp</th><th>Inscription</th><th>Décision</th></tr></thead><tbody>{adminRequests.map((request) => <tr key={String(request.uid)}><td><strong>{String(request.firstName ?? '')} {String(request.lastName ?? '')}</strong></td><td>{String(request.email ?? '')}</td><td>{String(request.whatsapp ?? '—')}</td><td>{String(request.createdAt ?? '—').slice(0,10)}</td><td><div className="inline-actions"><button className="button button-primary" onClick={() => void decideAdminRequest(String(request.uid), 'approved')}>Approuver</button><button className="button button-danger-ghost" onClick={() => void decideAdminRequest(String(request.uid), 'rejected')}>Refuser</button></div></td></tr>)}</tbody></table></div>}</section>}
+      {settingsTab === 'access' && (isSuperAdmin || currentProfile?.role === 'admin') && <section className="panel"><div className="panel-heading"><div><h3>{isSuperAdmin ? 'Demandes administrateur' : 'Demandes de collaboration'}</h3><p>{isSuperAdmin ? 'Approuvez ou refusez les demandes d’accès.' : 'Approuvez les collaborateurs de votre espace.'}</p></div><button className="button button-secondary" onClick={() => void loadAdminRequests()} disabled={requestsLoading}><Activity size={16}/>{requestsLoading ? 'Chargement…' : 'Actualiser'}</button></div>{requestsLoading ? <div className="empty-state">Chargement des demandes…</div> : adminRequests.length === 0 ? <div className="empty-state"><ShieldCheck size={28}/><strong>Aucune demande en attente</strong><span>Les nouvelles inscriptions apparaîtront ici.</span></div> : <div className="table-wrap"><table><thead><tr><th>Administrateur</th><th>E-mail</th><th>{isSuperAdmin ? 'WhatsApp' : 'Rôle'}</th><th>Inscription</th><th>Décision</th></tr></thead><tbody>{adminRequests.map((request) => <tr key={String(request.uid)}><td><strong>{String(request.firstName ?? '')} {String(request.lastName ?? '')}</strong></td><td>{String(request.email ?? '')}</td><td>{isSuperAdmin ? String(request.whatsapp ?? '—') : 'Collaborateur'}</td><td>{String(request.createdAt ?? '—').slice(0,10)}</td><td><div className="inline-actions"><button className="button button-primary" onClick={() => void decideAdminRequest(String(request.uid), 'approved')}>Approuver</button><button className="button button-danger-ghost" onClick={() => void decideAdminRequest(String(request.uid), 'rejected')}>Refuser</button></div></td></tr>)}</tbody></table></div>}</section>}
     </>
   );
 
