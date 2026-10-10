@@ -898,8 +898,8 @@ function AuthScreen() {
           role: 'collaborator', status: 'pending', super_admin: false, projectId: normalizedProjectId,
           createdAt: new Date().toISOString(),
         });
-        await signOut(auth);
-        await signInAnonymously(auth);
+        // Keep this anonymous session: the profile is keyed by this UID.
+        // Signing out and signing in again would create a different UID.
         setMessage('Demande envoyée. Attends que l’administrateur approuve ton accès.');
       } else if (mode === 'register') {
         const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
@@ -933,7 +933,8 @@ function AuthScreen() {
         'auth/invalid-credential': 'Adresse e-mail ou mot de passe incorrect.',
         'auth/too-many-requests': 'Trop de tentatives. Réessaie plus tard.',
         'auth/user-not-found': 'Aucun compte ne correspond à cette adresse.',
-        'permission-denied': 'Le profil n’a pas pu être enregistré : vérifie les règles Firestore.',
+        'permission-denied': 'Firestore a refusé l’opération. Vérifie les règles et les champs envoyés.',
+        'firestore/permission-denied': 'Firestore a refusé l’opération. Vérifie les règles et les champs envoyés.',
       };
       setError(messages[code] ?? (e instanceof Error ? e.message : 'Une erreur est survenue.'));
     } finally { setBusy(false); }
