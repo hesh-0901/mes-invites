@@ -1,31 +1,27 @@
+```typescript
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDxj2LH5k1EpE3-ssQb2E1D4WPOZwBn1l8',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'japhm-6445b.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'japhm-6445b',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'japhm-6445b.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '433387974348',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:433387974348:web:3c6bd215f0350378c1dc69',
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-297W02X06F',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDvOcaPR-1hgc22SrTsQj1NWbXK32PABYM',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'mariage-424b1.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'mariage-424b1',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'mariage-424b1.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '24983143200',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:24983143200:web:9f0deff21ea1fddcaf0d45',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-9YE2WTHMB3',
 };
 
-export const firebaseConfigured = Boolean(
-  firebaseConfig.apiKey &&
-  firebaseConfig.projectId &&
-  firebaseConfig.appId,
-);
+const app = getApps().length
+  ? getApp()
+  : initializeApp(firebaseConfig);
 
-export const firebaseApp = firebaseConfigured
-  ? (getApps().length ? getApp() : initializeApp(firebaseConfig))
-  : null;
+export const auth = getAuth(app);
+export const firestore = getFirestore(app);
+export const storage = getStorage(app);
 
-export const auth = firebaseApp ? getAuth(firebaseApp) : null;
-export const firestore = firebaseApp ? getFirestore(firebaseApp) : null;
-export const storage = firebaseApp ? getStorage(firebaseApp) : null;
-
-// This module only initializes client SDKs. Sensitive operations such as check-in
-// must be verified by a trusted server and atomic database transaction.
+export const firebaseConfigured = true;
+export const firebaseApp = app;
+```
