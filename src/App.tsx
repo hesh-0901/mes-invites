@@ -7,6 +7,7 @@ import {
   AlertTriangle, Camera, LockKeyhole, Trash2, Pencil,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { Html5Qrcode } from 'html5-qrcode';
 import { firebaseConfigured } from './firebase';
 import { initialCheckins, initialGuests, initialTables } from './data';
@@ -170,13 +171,17 @@ export default function App() {
   };
 
   const generateInvitation = (guestId: string) => {
-    const token = `demo:${makeId('invite')}`;
-    setGuests((current) => current.map((guest) => guest.id === guestId
-      ? { ...guest, invitationStatus: 'generated', token: guest.token ?? token }
-      : guest));
+    if (!templateImage) {
+      notify('Importe d’abord le modèle de l’invitation dans Templates.', 'error');
+      navigate('templates');
+      return;
+    }
     const guest = guests.find((item) => item.id === guestId);
-    if (guest) setDetailGuest({ ...guest, invitationStatus: 'generated', token: guest.token ?? token });
-    notify('Invitation générée en mode démonstration.', 'info');
+    if (!guest) return;
+    const updated = { ...guest, invitationStatus: 'generated' as const, token: guest.token ?? `MESINVITES-${globalThis.crypto?.randomUUID?.() ?? makeId('invite')}` };
+    setGuests((current) => current.map((item) => item.id === guestId ? updated : item));
+    setDetailGuest(updated);
+    notify('QR code unique généré. Tu peux télécharger l’invitation personnalisée.');
   };
 
   const validateScan = useCallback((raw: string) => {
@@ -233,19 +238,63 @@ export default function App() {
     notify('Invité supprimé du prototype.', 'info');
   };
 
-  const downloadDemoInvitation = (guest: Guest) => {
-    if (!guest.token) { notify('Génère d’abord cette invitation.', 'error'); return; }
-    const svg = document.querySelector('#invitation-qr svg');
-    if (!svg) { notify('QR code indisponible.', 'error'); return; }
-    const svgText = new XMLSerializer().serializeToString(svg);
-    const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `mes-invites-${guest.id}.svg`;
-    link.click();
-    URL.revokeObjectURL(url);
-    notify('QR code de démonstration téléchargé.', 'info');
+  const downloadDemoInvitation = async (guest: Guest) => {
+    if (!guest.token || !templateImage) {
+      notify('Génère le QR code et importe un template avant le téléchargement.', 'error');
+      return;
+    }
+    try {
+      const background = new Image();
+      background.crossOrigin = 'anonymous';
+      background.src = templateImage;
+      await new Promise<void>((resolve, reject) => {
+        background.onload = () => resolve();
+        background.onerror = () => reject(new Error('Impossible de charger le template.'));
+      });
+      const width = background.naturalWidth;
+      const height = background.naturalHeight;
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas indisponible.');
+      ctx.drawImage(background, 0, 0, width, height);
+      const fontSize = Math.max(12, width * templateNameSize / 100);
+      ctx.font = `600 ${fontSize}px Georgia, serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#762d40';
+      ctx.shadowColor = '#ffffffcc';
+      ctx.shadowBlur = Math.max(0, width * 0.002);
+      ctx.fillText(guest.displayName, width * templateNameX / 100, height * templateNameY / 100, width * 0.85);
+      ctx.shadowBlur = 0;
+      const qrSvg = renderToStaticMarkup(<QRCodeSVG value={guest.token} size={512} level="H" includeMargin />);
+      const qrUrl = URL.createObjectURL(new Blob([qrSvg], { type: 'image/svg+xml;charset=utf-8' }));
+      try {
+        const qrImage = new Image();
+        qrImage.src = qrUrl;
+        await new Promise<void>((resolve, reject) => {
+          qrImage.onload = () => resolve();
+          qrImage.onerror = () => reject(new Error('Impossible de créer le QR code.'));
+        });
+        const qrSize = width * templateQrSize / 100;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(width * templateQrX / 100 - qrSize / 2, height * templateQrY / 100 - qrSize / 2, qrSize, qrSize);
+        ctx.drawImage(qrImage, width * templateQrX / 100 - qrSize / 2, height * templateQrY / 100 - qrSize / 2, qrSize, qrSize);
+      } finally {
+        URL.revokeObjectURL(qrUrl);
+      }
+      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error('Export PNG impossible.')), 'image/png'));
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `mes-invites-${guest.id}.png`;
+      link.click();
+      URL.revokeObjectURL(url);
+      notify('Invitation personnalisée téléchargée en PNG.');
+    } catch {
+      notify('Impossible de composer le PNG. Vérifie que le template est bien accessible.', 'error');
+    }
   };
 
   const renderGuestTable = (items: Guest[]) => (
@@ -325,8 +374,8 @@ export default function App() {
   const renderInvitations = () => (
     <>
       <section className="welcome-row"><div><div className="eyebrow">PERSONNALISATION</div><h2>Les invitations</h2><p>Générez et consultez les invitations associées aux invités.</p></div><button className="button button-secondary" onClick={() => navigate('templates')}><FileImage size={17} /> Voir les templates</button></section>
-      <section className="notice notice-info"><Sparkles size={18} /><div><strong>Template original en attente</strong><p>Le template du mariage n’a pas encore été fourni. La génération actuelle crée uniquement un QR code de démonstration.</p></div></section>
-      <section className="panel"><div className="panel-heading"><div><h3>Invitations individuelles</h3><p>Une invitation par personne ou par couple.</p></div><div className="search-box"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher" /></div></div><div className="invitation-list">{guests.filter((guest) => guest.displayName.toLocaleLowerCase('fr').includes(search.toLocaleLowerCase('fr'))).map((guest) => <div className="invitation-row" key={guest.id}><div className="invitation-thumb"><Heart size={21} /><span>INVITATION</span></div><div className="invitation-info"><strong>{guest.displayName}</strong><small>{tables.find((table) => table.id === guest.tableId)?.name ?? 'Table inconnue'} · {guest.kind === 'couple' ? 'Couple' : 'Personne seule'}</small><span className={`status-pill ${guest.invitationStatus === 'generated' ? 'status-green' : 'status-neutral'}`}><span className="status-dot" />{statusLabel(guest.invitationStatus)}</span></div><div className="invitation-actions">{guest.invitationStatus === 'generated' ? <button className="button button-secondary button-small" onClick={() => setDetailGuest(guest)}><Eye size={15} /> Aperçu</button> : <button className="button button-primary button-small" onClick={() => generateInvitation(guest.id)}><QrCode size={15} /> Générer</button>}</div></div>)}</div></section>
+      <section className={`notice ${templateImage ? 'notice-success' : 'notice-info'}`}><Sparkles size={18} /><div><strong>{templateImage ? 'Template prêt' : 'Importe le visuel de ton invitation'}</strong><p>{templateImage ? 'Vérifie les positions dans Templates, puis génère un QR unique pour chaque invité. Le téléchargement produit une invitation PNG personnalisée.' : 'Ouvre Templates pour envoyer le visuel, régler le nom et le QR code, puis revenir ici pour générer les invitations.'}</p></div></section>
+      <section className="panel"><div className="panel-heading"><div><h3>Invitations individuelles</h3><p>Une invitation par personne ou par couple.</p></div><div className="search-box"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher" /></div></div><div className="invitation-list">{guests.filter((guest) => guest.displayName.toLocaleLowerCase('fr').includes(search.toLocaleLowerCase('fr'))).map((guest) => <div className="invitation-row" key={guest.id}><div className="invitation-thumb">{templateImage ? <img src={templateImage} alt="" /> : <Heart size={21} />}<span>INVITATION</span></div><div className="invitation-info"><strong>{guest.displayName}</strong><small>{tables.find((table) => table.id === guest.tableId)?.name ?? 'Table inconnue'} · {guest.kind === 'couple' ? 'Couple' : 'Personne seule'}</small><span className={`status-pill ${guest.invitationStatus === 'generated' ? 'status-green' : 'status-neutral'}`}><span className="status-dot" />{statusLabel(guest.invitationStatus)}</span></div><div className="invitation-actions">{guest.invitationStatus === 'generated' ? <button className="button button-secondary button-small" onClick={() => setDetailGuest(guest)}><Eye size={15} /> Aperçu</button> : <button className="button button-primary button-small" onClick={() => generateInvitation(guest.id)}><QrCode size={15} /> Générer</button>}</div></div>)}</div></section>
     </>
   );
 
@@ -342,21 +391,28 @@ export default function App() {
     } catch { notify('Impossible d’enregistrer les paramètres du template.', 'error'); }
   };
 
-  const importTemplate = (file?: File) => {
+  const importTemplate = async (file?: File) => {
     if (!file) return;
-    if (!file.type.startsWith('image/')) { notify('Choisis une image PNG, JPG ou WebP.', 'error'); return; }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const image = String(reader.result ?? '');
-      try {
-        window.localStorage.setItem('mes-invites-template-image', image);
-        setTemplateImage(image);
-        notify('Template importé sur cet appareil.');
-      } catch {
-        notify('Image trop volumineuse pour le stockage local. Utilise un PNG ou JPG optimisé.', 'error');
-      }
-    };
-    reader.readAsDataURL(file);
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      notify('Choisis une image PNG, JPG ou WebP.', 'error');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      notify('Le fichier dépasse la limite de 10 Mo.', 'error');
+      return;
+    }
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const response = await fetch('/api/upload-template', { method: 'POST', body });
+      const result = await response.json() as { secure_url?: string; error?: string };
+      if (!response.ok || !result.secure_url) throw new Error(result.error || 'Échec de l’envoi vers Cloudinary.');
+      window.localStorage.setItem('mes-invites-template-image', result.secure_url);
+      setTemplateImage(result.secure_url);
+      notify('Template envoyé sur Cloudinary et chargé dans l’éditeur.');
+    } catch (error) {
+      notify(error instanceof Error ? error.message : 'Échec de l’envoi du template.', 'error');
+    }
   };
 
   const renderTemplates = () => (
@@ -421,7 +477,7 @@ export default function App() {
       </main>
       {tableModal && <Modal title="Créer une table" description="Définissez un nom clair pour retrouver facilement les invités." onClose={() => setTableModal(false)}><form onSubmit={saveTable} className="form-stack"><label>Nom ou numéro de table<input autoFocus value={newTableName} onChange={(event) => setNewTableName(event.target.value)} placeholder="Ex. Table 03" required /></label><label>Description <span className="optional-label">Facultatif</span><input value={newTableDescription} onChange={(event) => setNewTableDescription(event.target.value)} placeholder="Ex. Famille et proches" /></label><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setTableModal(false)}>Annuler</button><button type="submit" className="button button-primary"><Plus size={16} /> Créer la table</button></div></form></Modal>}
       {guestModal && <Modal title={editingGuest ? 'Modifier l’invité' : 'Ajouter un invité'} description={activeTable ? `Table sélectionnée : ${activeTable.name}` : 'L’invité doit être affecté à une table existante.'} onClose={() => setGuestModal(false)}><form onSubmit={saveGuest} className="form-stack"><label>Nom de l’invité ou des invités<input autoFocus value={guestName} onChange={(event) => setGuestName(event.target.value)} placeholder={kind === 'couple' ? 'Jean et Marie Mukendi' : 'Jean Mukendi'} required /></label><label>Type d’invitation<select value={kind} onChange={(event) => setKind(event.target.value as InvitationKind)}><option value="individual">Personne seule</option><option value="couple">Couple</option></select></label>{kind === 'individual' && <label>Civilité<select value={salutation} onChange={(event) => setSalutation(event.target.value as Salutation)}><option>Monsieur</option><option>Madame</option><option>Mademoiselle</option></select></label>}<div className="name-preview"><span>APERÇU DU NOM</span><strong>{guestName.trim() ? makeDisplayName(guestName, salutation, kind) : 'Le nom apparaîtra ici'}</strong></div><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setGuestModal(false)}>Annuler</button><button type="submit" className="button button-primary"><Check size={16} /> {editingGuest ? 'Enregistrer' : 'Ajouter l’invité'}</button></div></form></Modal>}
-      {detailGuest && <Modal title="Détail de l’invitation" description="Fiche et QR code de démonstration." onClose={() => setDetailGuest(null)} wide><div className="detail-layout"><div className="detail-invite-preview"><div className="detail-flourish"><Heart size={22} /></div><span className="detail-kicker">VOUS ÊTES CORDIALEMENT INVITÉ(E)</span><strong className="detail-name">{detailGuest.displayName}</strong><span className="detail-divider" /><span className="detail-placeholder">Template original à intégrer</span>{detailGuest.token && <div className="detail-qr" id="invitation-qr"><QRCodeSVG value={detailGuest.token} size={112} level="H" includeMargin /></div>}<small className="detail-id">{detailGuest.token ? 'QR de démonstration' : 'QR non généré'}</small></div><div className="detail-meta"><div className="detail-meta-row"><span>Table</span><strong>{tables.find((table) => table.id === detailGuest.tableId)?.name ?? 'Table inconnue'}</strong></div><div className="detail-meta-row"><span>Type</span><strong>{detailGuest.kind === 'couple' ? 'Couple' : 'Personne seule'}</strong></div><div className="detail-meta-row"><span>Invitation</span><strong>{statusLabel(detailGuest.invitationStatus)}</strong></div><div className="detail-meta-row"><span>Entrée</span><strong>{statusLabel(detailGuest.checkinStatus)}</strong></div><div className="detail-meta-row"><span>Identifiant</span><code>{detailGuest.id}</code></div><div className="detail-actions">{detailGuest.invitationStatus !== 'generated' && <button className="button button-primary button-wide" onClick={() => generateInvitation(detailGuest.id)}><QrCode size={16} /> Générer le QR code</button>}{detailGuest.token && <button className="button button-secondary button-wide" onClick={() => downloadDemoInvitation(detailGuest)}><Download size={16} /> Télécharger le QR (SVG)</button>}<button className="button button-secondary button-wide" onClick={() => { setDetailGuest(null); openAddGuest(detailGuest); }}><Pencil size={15} /> Modifier la fiche</button><button className="button button-danger-ghost button-wide" onClick={() => deleteGuest(detailGuest)}><Trash2 size={15} /> Supprimer l’invité</button><p className="muted-copy small-note">Le visuel complet de l’invitation sera disponible après intégration du template original.</p></div></div></div></Modal>}
+      {detailGuest && <Modal title="Détail de l’invitation" description="Fiche invité, QR unique et invitation personnalisée." onClose={() => setDetailGuest(null)} wide><div className="detail-layout"><div className="detail-invite-preview"><div className="detail-flourish"><Heart size={22} /></div><span className="detail-kicker">VOUS ÊTES CORDIALEMENT INVITÉ(E)</span><strong className="detail-name">{detailGuest.displayName}</strong><span className="detail-divider" /><span className="detail-placeholder">Template original à intégrer</span>{detailGuest.token && <div className="detail-qr" id="invitation-qr"><QRCodeSVG value={detailGuest.token} size={112} level="H" includeMargin /></div>}<small className="detail-id">{detailGuest.token ? 'QR de démonstration' : 'QR non généré'}</small></div><div className="detail-meta"><div className="detail-meta-row"><span>Table</span><strong>{tables.find((table) => table.id === detailGuest.tableId)?.name ?? 'Table inconnue'}</strong></div><div className="detail-meta-row"><span>Type</span><strong>{detailGuest.kind === 'couple' ? 'Couple' : 'Personne seule'}</strong></div><div className="detail-meta-row"><span>Invitation</span><strong>{statusLabel(detailGuest.invitationStatus)}</strong></div><div className="detail-meta-row"><span>Entrée</span><strong>{statusLabel(detailGuest.checkinStatus)}</strong></div><div className="detail-meta-row"><span>Identifiant</span><code>{detailGuest.id}</code></div><div className="detail-actions">{detailGuest.invitationStatus !== 'generated' && <button className="button button-primary button-wide" onClick={() => generateInvitation(detailGuest.id)}><QrCode size={16} /> Générer le QR code</button>}{detailGuest.token && <button className="button button-secondary button-wide" onClick={() => void downloadDemoInvitation(detailGuest)}><Download size={16} /> Télécharger l’invitation (PNG)</button>}<button className="button button-secondary button-wide" onClick={() => { setDetailGuest(null); openAddGuest(detailGuest); }}><Pencil size={15} /> Modifier la fiche</button><button className="button button-danger-ghost button-wide" onClick={() => deleteGuest(detailGuest)}><Trash2 size={15} /> Supprimer l’invité</button><p className="muted-copy small-note">Le PNG téléchargé reprend le template et les positions enregistrées dans cet éditeur.</p></div></div></div></Modal>}
       {toast && <div className={`toast toast-${toast.kind}`}><span>{toast.kind === 'success' ? <CheckCircle2 size={18} /> : toast.kind === 'error' ? <AlertTriangle size={18} /> : <CircleHelp size={18} />}</span>{toast.message}<button aria-label="Fermer" onClick={() => setToast(null)}><X size={15} /></button></div>}
     </div>
   );
