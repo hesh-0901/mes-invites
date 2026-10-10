@@ -77,9 +77,10 @@ export default function App() {
       try {
         const profileSnapshot = await getDoc(doc(firestore, 'users', user.uid));
         const profile = profileSnapshot.exists() ? profileSnapshot.data() : null;
-        // Anonymous users may be between authentication and profile creation.
-        // Do not strand them on the unavailable screen during this brief window.
+        // No profile means this anonymous session has not completed a join request.
+        // Return to the join form; its submit handler can reuse auth.currentUser.
         if (!profile && user.isAnonymous) {
+          setAuthUser(null);
           setCurrentProfile(null);
           setIsSuperAdmin(false);
           setAccessState('checking');
