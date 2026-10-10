@@ -851,7 +851,7 @@ export default function App() {
           {projectCollaborators.length === 0 ? <div className="access-empty"><Users size={25}/><strong>Aucun collaborateur approuvé</strong><p>Les collaborateurs apparaîtront ici après approbation.</p></div> : <div className="access-collaborator-list">{projectCollaborators.map((person) => <article className="access-collaborator-card" key={String(person.uid)}><span className="access-person-avatar">{String(person.firstName ?? 'C').slice(0,1).toUpperCase()}</span><div className="access-person-info"><strong>{String(person.firstName ?? '')} {String(person.lastName ?? '')}</strong><span className="access-active-status">Accès approuvé</span></div><div className="access-permission-summary"><strong>{Array.isArray(person.permissions) ? (person.permissions as string[]).length : defaultCollaboratorMenus.length}<span>/8</span></strong><small>menus autorisés</small></div><button type="button" className="button button-primary access-manage-button" onClick={() => openPermissions(person)}><Settings size={16}/> Gérer les accès <ChevronRight size={15}/></button></article>)}</div>}
         </section>}
         <section className="access-security-note"><LockKeyhole size={20}/><div><strong>Gestion sécurisée</strong><p>Les accès restent soumis à approbation. Firestore continue de contrôler les autorisations sur les données.</p></div></section>
-      </>}>}
+      </>}
     </>
   );
 
