@@ -309,3 +309,12 @@ tbody td>strong{font-weight:600;color:#453c41}
 .template-locked-canvas .template-live-preview{width:auto;height:auto;max-width:100%;max-height:calc(100vh - 260px);aspect-ratio:inherit;background-size:100% 100%;flex:0 1 auto}
 .template-locked-caption{display:flex;align-items:center;gap:7px;color:#8a7c80;font-size:11px;margin:0}
 @media(max-width:700px){.template-locked-workspace{min-height:calc(100vh - 150px);padding-top:8px}.template-locked-canvas{max-height:calc(100vh - 230px)}.template-locked-canvas .template-live-preview{max-height:calc(100vh - 230px)}.template-locked-topline{padding:0 2px}}
+
+/* Direct-manipulation handles for name and QR placement */
+.template-draggable{cursor:grab;touch-action:none;user-select:none;outline:1px dashed #b88d53;outline-offset:3px}
+.template-draggable:active,.template-draggable.template-dragging{cursor:grabbing;outline:2px solid #c7a56a;z-index:10}
+.template-drag-hint{position:absolute;left:50%;bottom:100%;transform:translateX(-50%);display:none;white-space:nowrap;background:#292629;color:#fff;border-radius:4px;padding:3px 6px;font:600 9px/1.2 'DM Sans',sans-serif;pointer-events:none}
+.template-draggable:hover .template-drag-hint,.template-draggable.template-dragging .template-drag-hint{display:block}
+.template-download-original{margin:0 0 12px;display:inline-flex;align-items:center;gap:8px}
+.template-live-preview{overflow:hidden;}
+.template-preview-qr{touch-action:none}
