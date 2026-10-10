@@ -98,7 +98,7 @@ export default function App() {
     let size = Math.max(12, canvasWidth * templateNameSize / 100);
     const minimum = Math.max(8, canvasWidth * 0.012);
     while (size > minimum) {
-      measure.font = `600 ${size}px Georgia, serif`;
+      measure.font = `600 ${size}px ${templateNameFont}, serif`;
       if (measure.measureText(text).width <= maxWidth) break;
       size -= 1;
     }
@@ -337,12 +337,21 @@ export default function App() {
       if (!ctx) throw new Error('Canvas indisponible.');
       ctx.drawImage(background, 0, 0, width, height);
       const fontSize = fitNameFontSize(guest.displayName, width);
-      ctx.font = `600 ${fontSize}px Georgia, serif`;
+      ctx.font = `600 ${fontSize}px ${templateNameFont}, serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#762d40';
-      ctx.shadowColor = '#ffffffcc';
-      ctx.shadowBlur = Math.max(0, width * 0.002);
+      ctx.fillStyle = templateNameColor;
+      if (templateNameEffect === 'shadow') {
+        ctx.shadowColor = '#ffffffcc';
+        ctx.shadowBlur = Math.max(2, width * 0.004);
+      } else if (templateNameEffect === 'outline') {
+        ctx.lineWidth = Math.max(1, width * 0.0015);
+        ctx.strokeStyle = '#ffffff';
+        ctx.strokeText(guest.displayName, width * templateNameX / 100, height * templateNameY / 100, width * templateNameWidth / 100);
+      } else if (templateNameEffect === 'glow') {
+        ctx.shadowColor = templateNameColor;
+        ctx.shadowBlur = Math.max(4, width * 0.012);
+      }
       ctx.fillText(guest.displayName, width * templateNameX / 100, height * templateNameY / 100, width * templateNameWidth / 100);
       ctx.shadowBlur = 0;
       const qrSvg = renderToStaticMarkup(<QRCodeSVG value={guest.token} size={512} level="H" includeMargin />);
