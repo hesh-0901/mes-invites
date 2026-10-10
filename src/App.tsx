@@ -792,8 +792,11 @@ export default function App() {
       }
       setAdminRequests((current) => current.filter((entry) => entry.uid !== uid));
       notify(status === 'approved' ? (isSuperAdmin ? 'Compte administrateur approuvé et espace créé.' : 'Collaborateur approuvé.') : 'Demande refusée.', 'success');
-    } catch {
-      notify('La décision n’a pas pu être enregistrée. Vérifie les règles Firestore.', 'error');
+    } catch (error) {
+      const firebaseError = error as { code?: string; message?: string };
+      const code = firebaseError.code ?? 'erreur-inconnue';
+      console.error('Échec de la décision d’accès :', code, firebaseError.message ?? error);
+      notify(`Décision non enregistrée (${code}). Vérifie les règles Firestore publiées.`, 'error');
     }
   };
 
