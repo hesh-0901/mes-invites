@@ -579,3 +579,14 @@ tbody td>strong{font-weight:600;color:#453c41}
  .landing-hero h1{font-size:37px}.landing-hero-actions{gap:10px}
  .landing-visual{min-height:330px}.landing-invitation-card{width:190px;min-height:270px}
 }
+
+/* Settings tabs and account identity */
+.settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px;padding:7px;background:#f7f5f3;border:1px solid #eee8e4;border-radius:14px}
+.settings-tab{display:inline-flex;align-items:center;gap:8px;border:1px solid transparent;background:transparent;color:#71666a;border-radius:10px;padding:11px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.settings-tab:hover{background:#fff;color:#762d40}.settings-tab.active{background:#fff;color:#762d40;border-color:#eadde0;box-shadow:0 2px 8px #4d24300a}
+.settings-detail-panel{padding:24px;display:flex;flex-direction:column;gap:22px}.settings-profile-head{display:flex;align-items:center;gap:16px;padding:18px 0;border-bottom:1px solid #eee8e4}
+.settings-large-avatar{width:58px;height:58px;border-radius:18px;background:#762d40;color:#fff;display:grid;place-items:center;font-size:23px;font-weight:700;flex-shrink:0}
+.settings-profile-head h3{margin:0 0 5px;font-size:17px}.settings-profile-head p{margin:0 0 10px;color:#82767a;font-size:13px}
+.settings-template-summary{display:flex;align-items:center;gap:14px;padding:18px;background:#faf8f6;border:1px solid #eee8e4;border-radius:12px}.settings-template-summary>div{display:flex;flex-direction:column;gap:5px}.settings-template-summary strong{font-size:14px}.settings-template-summary small{font-size:12px;color:#82767a}
+.profile-user-copy{min-width:0;display:flex;flex-direction:column;gap:4px}.profile-user-copy strong,.profile-user-copy small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px}.profile-user-copy small{font-size:11px;color:#94878b}.profile-menu-button{border:0;background:transparent;color:inherit;cursor:pointer;padding:5px;margin-left:auto}
+@media(max-width:640px){.settings-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}.settings-tab{justify-content:center;padding:10px 7px;font-size:12px}.settings-detail-panel{padding:17px}}
