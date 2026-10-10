@@ -10,7 +10,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Html5Qrcode } from 'html5-qrcode';
 import { auth, firebaseConfigured, firestore } from './firebase';
-import { createUserWithEmailAndPassword, onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth';
+import { createUserWithEmailAndPassword, onAuthStateChanged, sendEmailVerification, signInAnonymously, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc } from 'firebase/firestore';
 import { deleteRecord, FIRESTORE_COLLECTIONS, loadCollection, saveCheckinRecord, saveGuestRecord, saveRecord, saveTableRecord } from './firestoreData';
 import type { Checkin, Guest, GuestTable, InvitationKind, Salutation } from './types';
@@ -60,7 +60,7 @@ export default function App() {
   useEffect(() => {
     if (!auth) { setAuthReady(true); return; }
     return onAuthStateChanged(auth, async (user) => {
-      if (!user?.emailVerified || !firestore) {
+      if (!user || (!user.isAnonymous && !user.emailVerified) || !firestore) {
         setAuthUser(null);
         setCurrentProfile(null);
         setIsSuperAdmin(false);
@@ -191,7 +191,7 @@ export default function App() {
         // The local demo remains usable without exposing records publicly.
       }
     };
-    if (firebaseConfigured && authUser?.emailVerified && accessState === 'approved' && projectId) void loadCloudData();
+    if (firebaseConfigured && authUser && (authUser.isAnonymous || authUser.emailVerified) && accessState === 'approved' && projectId) void loadCloudData();
     return () => { cancelled = true; };
   }, [authUser, accessState, projectId]);
 
@@ -818,35 +818,41 @@ function AuthScreen() {
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setError(''); setMessage('');
     if (!auth || !firestore) { setError('Firebase n’est pas configuré.'); return; }
-    if ((mode === 'register' || mode === 'collaborator') && password !== confirmPassword) { setError('Les deux mots de passe ne correspondent pas.'); return; }
-    if ((mode === 'register' || mode === 'collaborator') && password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); return; }
+    if (mode === 'register' && password !== confirmPassword) { setError('Les deux mots de passe ne correspondent pas.'); return; }
+    if (mode === 'register' && password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); return; }
     if (mode === 'collaborator' && !projectId.trim()) { setError('Saisis le code de ton espace.'); return; }
     setBusy(true);
     try {
-      if (mode === 'register' || mode === 'collaborator') {
+      if (mode === 'collaborator') {
         const normalizedProjectId = projectId.trim();
-        if (mode === 'collaborator') {
-          const projectSnapshot = await getDoc(doc(firestore, 'projects', normalizedProjectId));
-          if (!projectSnapshot.exists() || projectSnapshot.data().status !== 'active') {
-            setError('Ce code d’espace est introuvable ou inactif. Vérifie-le auprès de l’administrateur.');
-            return;
-          }
+        const cleanName = firstName.trim();
+        if (!cleanName) { setError('Saisis ton nom.'); return; }
+        const projectSnapshot = await getDoc(doc(firestore, 'projects', normalizedProjectId));
+        if (!projectSnapshot.exists() || projectSnapshot.data().status !== 'active') {
+          setError('Code d’espace introuvable ou inactif. Vérifie le code fourni par l’administrateur.');
+          return;
         }
+        const credential = await signInAnonymously(auth);
+        await updateProfile(credential.user, { displayName: cleanName });
+        await setDoc(doc(firestore, 'users', credential.user.uid), {
+          uid: credential.user.uid, firstName: cleanName, lastName: '', email: '', whatsapp: '',
+          role: 'collaborator', status: 'pending', super_admin: false, projectId: normalizedProjectId,
+          createdAt: new Date().toISOString(),
+        });
+        setMessage('Demande envoyée. Attends que l’administrateur approuve ton accès.');
+      } else if (mode === 'register') {
         const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
         const displayName = `${firstName.trim()} ${lastName.trim()}`.trim();
         await updateProfile(credential.user, { displayName });
         await setDoc(doc(firestore, 'users', credential.user.uid), {
           uid: credential.user.uid, firstName: firstName.trim(), lastName: lastName.trim(),
-          whatsapp: mode === 'register' ? whatsapp.trim() : '', email: email.trim().toLowerCase(),
-          role: mode === 'register' ? 'admin' : 'collaborator', status: 'pending',
-          super_admin: false, projectId: mode === 'register' ? null : normalizedProjectId,
+          whatsapp: whatsapp.trim(), email: email.trim().toLowerCase(),
+          role: 'admin', status: 'pending', super_admin: false, projectId: null,
           createdAt: new Date().toISOString(),
         });
         await sendEmailVerification(credential.user);
         setVerificationPending(true);
-        setMessage(mode === 'register'
-          ? 'Demande de compte administrateur envoyée. Vérifie ton e-mail ; ton accès sera activé après approbation par le super administrateur.'
-          : 'Demande de collaboration envoyée. Vérifie ton e-mail ; l’administrateur de cet espace devra ensuite approuver ton accès.');
+        setMessage('Demande de compte administrateur envoyée. Vérifie ton e-mail ; ton accès sera activé après approbation par le super administrateur.');
         await signOut(auth);
       } else {
         const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
@@ -882,16 +888,17 @@ function AuthScreen() {
   </main>;
   return <main className="auth-screen"><section className="auth-card"><div className="auth-brand"><span className="auth-mark"><Heart size={24}/></span><span>Mes Invites<small>Gestion élégante de vos invitations</small></span></div><div className="auth-intro"><span className="eyebrow">ESPACE PRIVÉ</span><h1>{mode === 'register' ? 'Créez votre compte' : mode === 'collaborator' ? 'Rejoindre un espace' : 'Bon retour'}</h1><p>{mode === 'register' ? 'Inscrivez-vous pour préparer et gérer vos invitations.' : mode === 'collaborator' ? 'Demandez l’accès à l’espace de votre administrateur.' : 'Connectez-vous pour accéder à votre espace.'}</p></div>
   <form className="form-stack auth-form" onSubmit={submit}>
-  {(mode === 'register' || mode === 'collaborator') && <div className="auth-name-grid"><label>Prénom<input autoComplete="given-name" value={firstName} onChange={e=>setFirstName(e.target.value)} required/></label><label>Nom<input autoComplete="family-name" value={lastName} onChange={e=>setLastName(e.target.value)} required/></label></div>}
+  {mode === 'register' && <div className="auth-name-grid"><label>Prénom<input autoComplete="given-name" value={firstName} onChange={e=>setFirstName(e.target.value)} required/></label><label>Nom<input autoComplete="family-name" value={lastName} onChange={e=>setLastName(e.target.value)} required/></label></div>}
+  {mode === 'collaborator' && <label>Ton nom<input autoComplete="name" value={firstName} onChange={e=>setFirstName(e.target.value)} placeholder="Nom et prénom" required /></label>}
   {mode === 'register' && <label>Numéro WhatsApp<input type="tel" autoComplete="tel" value={whatsapp} onChange={e=>setWhatsapp(e.target.value)} placeholder="+243…" required/></label>}
   {mode === 'collaborator' && <label>Code de l’espace<input autoComplete="off" value={projectId} onChange={e=>setProjectId(e.target.value)} placeholder="Code fourni par l’administrateur" required /></label>}
-  <label>Adresse e-mail<input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="vous@exemple.com" required/></label>
+  {mode !== 'collaborator' && <><label>Adresse e-mail<input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="vous@exemple.com" required/></label>
   <label>Mot de passe<input type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={e=>setPassword(e.target.value)} minLength={8} required/></label>
-  {(mode === 'register' || mode === 'collaborator') && <label>Confirmer le mot de passe<input type="password" autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} minLength={8} required/></label>}
+  {mode === 'register' && <label>Confirmer le mot de passe<input type="password" autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} minLength={8} required/></label>}</>}
   {error && <p className="auth-alert auth-error" role="alert">{error}</p>}{message && <p className="auth-alert auth-success" role="status">{message}</p>}
   {verificationPending && mode === 'login' && <button className="button button-secondary auth-submit" disabled={busy} type="button" onClick={async()=>{if(!auth) return;setBusy(true);setError('');try{const credential=await signInWithEmailAndPassword(auth,email.trim(),password);await sendEmailVerification(credential.user);await signOut(auth);setMessage('Nouveau lien de vérification envoyé.');}catch(e){setError(e instanceof Error?e.message:'Impossible de renvoyer le lien.');}finally{setBusy(false);}}}>Renvoyer le lien de vérification</button>}
   <button className="button button-primary auth-submit" disabled={busy} type="submit">{busy ? 'Patiente…' : mode === 'register' ? 'Créer mon compte administrateur' : mode === 'collaborator' ? 'Demander l’accès' : 'Se connecter'}</button>
-  </form><p className="auth-switch">{mode === 'register' || mode === 'collaborator' ? 'Vous avez déjà un compte ?' : 'Vous n’avez pas encore de compte ?'} <button type="button" onClick={()=>{setMode(mode === 'register' || mode === 'collaborator' ? 'login' : 'register');setError('');setMessage('');}}>{mode === 'register' || mode === 'collaborator' ? 'Se connecter' : 'Créer un compte administrateur'}</button></p><p className="auth-switch"><button type="button" onClick={()=>{setMode(mode === 'collaborator' ? 'register' : 'collaborator');setError('');setMessage('');}}>{mode === 'collaborator' ? 'Créer un espace administrateur' : 'Je suis collaborateur'}</button></p><p className="auth-footnote"><ShieldCheck size={14}/> Vos informations sont protégées.</p></section></main>;
+  </form><p className="auth-switch">{mode === 'collaborator' ? 'Besoin d’un compte administrateur ?' : mode === 'register' ? 'Vous avez déjà un compte ?' : 'Vous n’avez pas encore de compte ?'} <button type="button" onClick={()=>{setMode(mode === 'register' || mode === 'collaborator' ? 'login' : 'register');setError('');setMessage('');}}>{mode === 'register' || mode === 'collaborator' ? 'Se connecter' : 'Créer un compte administrateur'}</button></p><p className="auth-switch"><button type="button" onClick={()=>{setMode(mode === 'collaborator' ? 'register' : 'collaborator');setError('');setMessage('');}}>{mode === 'collaborator' ? 'Créer un espace administrateur' : 'Je suis collaborateur'}</button></p><p className="auth-footnote"><ShieldCheck size={14}/> Vos informations sont protégées.</p></section></main>;
 }
 
 function StatCard({ label, value, note, icon: Icon, trend }: { label: string; value: number; note?: string; icon: typeof Users; trend?: string }) {
