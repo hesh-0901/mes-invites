@@ -95,10 +95,26 @@ service cloud.firestore {
         && request.resource.data.super_admin == false
         && request.resource.data.status == 'pending'
         && (
-          (request.resource.data.role == 'admin' && request.resource.data.projectId == null)
-          || (request.resource.data.role == 'collaborator'
+          (
+            request.resource.data.role == 'admin'
+            && request.auth.token.firebase.sign_in_provider != 'anonymous'
+            && request.auth.token.email_verified == true
+            && request.resource.data.projectId == null
+            && request.resource.data.keys().hasOnly([
+              'uid', 'firstName', 'lastName', 'whatsapp', 'email',
+              'role', 'status', 'super_admin', 'projectId', 'createdAt'
+            ])
+          )
+          ||
+          (
+            request.resource.data.role == 'collaborator'
             && request.resource.data.projectId is string
-            && activeProject(request.resource.data.projectId))
+            && activeProject(request.resource.data.projectId)
+            && request.resource.data.keys().hasOnly([
+              'uid', 'firstName', 'lastName', 'email', 'whatsapp',
+              'role', 'status', 'super_admin', 'projectId', 'createdAt'
+            ])
+          )
         );
 
       allow read: if (request.auth != null && request.auth.uid == userId)
