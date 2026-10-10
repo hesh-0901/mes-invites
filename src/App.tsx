@@ -83,9 +83,9 @@ export default function App() {
   const [templateQrSize, setTemplateQrSize] = useState(() => Number(window.localStorage.getItem('mes-invites-template-qr-size') ?? 14));
   const [templateNameSize, setTemplateNameSize] = useState(() => Number(window.localStorage.getItem('mes-invites-template-name-size') ?? 3));
   const [templateNameWidth, setTemplateNameWidth] = useState(() => Number(window.localStorage.getItem('mes-invites-template-name-width') ?? 60));
-  const [templateNameColor] = useState(() => window.localStorage.getItem('mes-invites-template-name-color') ?? '#762d40');
-  const [templateNameFont] = useState(() => window.localStorage.getItem('mes-invites-template-name-font') ?? 'Georgia');
-  const [templateNameEffect] = useState(() => window.localStorage.getItem('mes-invites-template-name-effect') ?? 'shadow');
+  const [templateNameColor, setTemplateNameColor] = useState(() => window.localStorage.getItem('mes-invites-template-name-color') ?? '#762d40');
+  const [templateNameFont, setTemplateNameFont] = useState(() => window.localStorage.getItem('mes-invites-template-name-font') ?? 'Georgia');
+  const [templateNameEffect, setTemplateNameEffect] = useState(() => window.localStorage.getItem('mes-invites-template-name-effect') ?? 'shadow');
   const [templateImageDimensions, setTemplateImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const [templateSampleName, setTemplateSampleName] = useState('Nom de l’invité');
   const [templateLocked, setTemplateLocked] = useState(() => window.localStorage.getItem('mes-invites-template-locked') === 'true');
@@ -132,7 +132,7 @@ export default function App() {
           loadCollection<GuestTable>(FIRESTORE_COLLECTIONS.tables),
           loadCollection<Guest>(FIRESTORE_COLLECTIONS.guests),
           loadCollection<Checkin>(FIRESTORE_COLLECTIONS.checkins),
-          loadCollection<{ id: string; imageUrl?: string; nameX?: number; nameY?: number; qrX?: number; qrY?: number; qrSize?: number; nameSize?: number; nameWidth?: number; locked?: boolean }>(FIRESTORE_COLLECTIONS.settings),
+          loadCollection<{ id: string; imageUrl?: string; nameX?: number; nameY?: number; qrX?: number; qrY?: number; qrSize?: number; nameSize?: number; nameWidth?: number; nameColor?: string; nameFont?: string; nameEffect?: string; locked?: boolean }>(FIRESTORE_COLLECTIONS.settings),
         ]);
         if (cancelled) return;
         if (cloudTables.length) setTables(cloudTables);
@@ -148,6 +148,9 @@ export default function App() {
           if (typeof templateSettings.qrSize === 'number') setTemplateQrSize(templateSettings.qrSize);
           if (typeof templateSettings.nameSize === 'number') setTemplateNameSize(templateSettings.nameSize);
           if (typeof templateSettings.nameWidth === 'number') setTemplateNameWidth(templateSettings.nameWidth);
+          if (typeof templateSettings.nameColor === 'string') setTemplateNameColor(templateSettings.nameColor);
+          if (typeof templateSettings.nameFont === 'string') setTemplateNameFont(templateSettings.nameFont);
+          if (typeof templateSettings.nameEffect === 'string') setTemplateNameEffect(templateSettings.nameEffect);
           if (templateSettings.locked) setTemplateLocked(true);
         }
       } catch {
@@ -529,8 +532,11 @@ export default function App() {
       window.localStorage.setItem('mes-invites-template-qr-size', String(templateQrSize));
       window.localStorage.setItem('mes-invites-template-name-size', String(templateNameSize));
       window.localStorage.setItem('mes-invites-template-name-width', String(templateNameWidth));
+      window.localStorage.setItem('mes-invites-template-name-color', templateNameColor);
+      window.localStorage.setItem('mes-invites-template-name-font', templateNameFont);
+      window.localStorage.setItem('mes-invites-template-name-effect', templateNameEffect);
       window.localStorage.setItem('mes-invites-template-locked', 'true');
-      void saveRecord(FIRESTORE_COLLECTIONS.settings, { id: 'template', imageUrl: templateImage, nameX: templateNameX, nameY: templateNameY, qrX: templateQrX, qrY: templateQrY, qrSize: templateQrSize, nameSize: templateNameSize, nameWidth: templateNameWidth, locked: true, updatedAt: new Date().toISOString() }).catch(() => undefined);
+      void saveRecord(FIRESTORE_COLLECTIONS.settings, { id: 'template', imageUrl: templateImage, nameX: templateNameX, nameY: templateNameY, qrX: templateQrX, qrY: templateQrY, qrSize: templateQrSize, nameSize: templateNameSize, nameWidth: templateNameWidth, nameColor: templateNameColor, nameFont: templateNameFont, nameEffect: templateNameEffect, locked: true, updatedAt: new Date().toISOString() }).catch(() => undefined);
       setTemplateLocked(true);
       notify('Modèle enregistré. Éditeur verrouillé.');
     } catch { notify('Impossible d’enregistrer les paramètres du template.', 'error'); }
@@ -567,7 +573,7 @@ export default function App() {
           <div className="template-locked-topline"><span><LockKeyhole size={14} /> MODÈLE CONFIGURÉ</span><button className="template-edit-discreet" onClick={() => { setTemplateLocked(false); window.localStorage.setItem('mes-invites-template-locked', 'false'); }}><Pencil size={14} /> Modifier</button></div>
           <div className="template-locked-canvas" style={{ aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4' }}>
             <div className="template-live-preview" style={{ backgroundImage: `url("${templateImage}")`, aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4', backgroundSize: '100% 100%' }}>
-              <div className="template-preview-name" style={{ left: `${templateNameX}%`, top: `${templateNameY}%`, fontSize: `${templateNameSize}cqw`, maxWidth: `${templateNameWidth}%` }}>{templateSampleName || 'Nom de l’invité'}</div>
+              <div className="template-preview-name" style={{ left: `${templateNameX}%`, top: `${templateNameY}%`, fontSize: `${templateNameSize}cqw`, maxWidth: `${templateNameWidth}%`, color: templateNameColor, fontFamily: templateNameFont, textShadow: templateNameEffect === 'shadow' ? '0 1px 3px #ffffffcc' : templateNameEffect === 'glow' ? `0 0 8px ${templateNameColor}` : 'none', WebkitTextStroke: templateNameEffect === 'outline' ? '0.6px white' : '0px transparent' }}>{templateSampleName || 'Nom de l’invité'}</div>
               <div className="template-preview-qr" style={{ left: `${templateQrX}%`, top: `${templateQrY}%`, width: `${templateQrSize}%` }}><QRCodeSVG value="APERÇU-MODÈLE-MES-INVITES" size={128} level="H" includeMargin /></div>
             </div>
           </div>
@@ -580,9 +586,10 @@ export default function App() {
             <div className="panel template-controls">
               <div className="panel-heading"><div><h3>Configuration du modèle</h3><p>Les positions sont exprimées en pourcentage du visuel.</p></div><Settings size={18} className="muted-icon" /></div>
               <label className="template-field">Nom de prévisualisation<input value={templateSampleName} onChange={(event) => setTemplateSampleName(event.target.value)} placeholder="Nom de l’invité" /></label>
+              <div className="template-control-group"><strong>Style du texte</strong><label>Police<select value={templateNameFont} onChange={(e) => setTemplateNameFont(e.target.value)}><option value="Georgia">Georgia — classique</option><option value="Arial">Arial — moderne</option><option value="Times New Roman">Times New Roman</option><option value="Garamond">Garamond — élégant</option><option value="Verdana">Verdana — lisible</option><option value="Courier New">Courier New</option></select></label><label>Couleur du texte<input type="color" value={templateNameColor} onChange={(e) => setTemplateNameColor(e.target.value)} /></label><label>Effet du texte<select value={templateNameEffect} onChange={(e) => setTemplateNameEffect(e.target.value)}><option value="none">Aucun</option><option value="shadow">Ombre claire</option><option value="outline">Contour blanc</option><option value="glow">Lueur</option></select></label></div>
               <div className="template-control-group"><strong>Position du nom</strong><label>Horizontal — {templateNameX}%<input type="range" min="0" max="100" value={templateNameX} onChange={(e) => setTemplateNameX(Number(e.target.value))} /></label><label>Vertical — {templateNameY}%<input type="range" min="0" max="100" value={templateNameY} onChange={(e) => setTemplateNameY(Number(e.target.value))} /></label><label>Taille maximale du texte — {templateNameSize}% de la largeur<input type="range" min="1" max="7" step="0.25" value={templateNameSize} onChange={(e) => setTemplateNameSize(Number(e.target.value))} /></label><label>Largeur réservée au nom — {templateNameWidth}%<input type="range" min="10" max="95" step="1" value={templateNameWidth} onChange={(e) => setTemplateNameWidth(Number(e.target.value))} /></label><small className="muted-copy">Les noms longs sont automatiquement réduits pour rester dans cette zone.</small></div>
               <div className="template-control-group"><strong>Position du QR code</strong><label>Horizontal — {templateQrX}%<input type="range" min="0" max="100" value={templateQrX} onChange={(e) => setTemplateQrX(Number(e.target.value))} /></label><label>Vertical — {templateQrY}%<input type="range" min="0" max="100" value={templateQrY} onChange={(e) => setTemplateQrY(Number(e.target.value))} /></label><label>Taille — {templateQrSize}% de la largeur<input type="range" min="6" max="28" step="1" value={templateQrSize} onChange={(e) => setTemplateQrSize(Number(e.target.value))} /></label></div>
-              <div className="modal-actions"><button className="button button-secondary" onClick={() => { setTemplateNameX(50); setTemplateNameY(55); setTemplateQrX(78); setTemplateQrY(82); setTemplateQrSize(14); setTemplateNameSize(3); setTemplateNameWidth(60); }}>Réinitialiser</button><button className="button button-primary" onClick={saveTemplateSettings}><Check size={16} /> Enregistrer et verrouiller</button></div>
+              <div className="modal-actions"><button className="button button-secondary" onClick={() => { setTemplateNameX(50); setTemplateNameY(55); setTemplateQrX(78); setTemplateQrY(82); setTemplateQrSize(14); setTemplateNameSize(3); setTemplateNameWidth(60); setTemplateNameColor('#762d40'); setTemplateNameFont('Georgia'); setTemplateNameEffect('shadow'); }}>Réinitialiser</button><button className="button button-primary" onClick={saveTemplateSettings}><Check size={16} /> Enregistrer et verrouiller</button></div>
               <p className="muted-copy small-note"><LockKeyhole size={14} /> Après l’enregistrement, les paramètres seront masqués. Utilise « Modifier » pour les afficher de nouveau.</p>
             </div>
             <div className="panel template-preview-panel"><div className="panel-heading"><div><h3>Aperçu en direct</h3><p>Exemple de placement du nom et du QR code.</p></div><Eye size={18} className="muted-icon" /></div>{templateImage && <button className="button button-secondary template-download-original" onClick={() => void downloadOriginalTemplate()}><Download size={15} /> Télécharger le template original</button>}
