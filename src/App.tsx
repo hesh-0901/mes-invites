@@ -65,6 +65,10 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [toast, setToast] = useState<Toast | null>(null);
   const [tableModal, setTableModal] = useState(false);
+  const [editingTable, setEditingTable] = useState<GuestTable | null>(null);
+  const [editTableName, setEditTableName] = useState('');
+  const [editTableDescription, setEditTableDescription] = useState('');
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ type: 'table'; item: GuestTable; stage: 1 | 2 } | { type: 'guest'; item: Guest; stage: 1 | 2 } | null>(null);
   const [guestModal, setGuestModal] = useState(false);
   const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
   const [detailGuest, setDetailGuest] = useState<Guest | null>(null);
@@ -208,17 +212,27 @@ export default function App() {
   };
 
   const editTable = (table: GuestTable) => {
-    const name = window.prompt('Nouveau nom de la table :', table.name)?.trim();
+    setEditingTable(table);
+    setEditTableName(table.name);
+    setEditTableDescription(table.description ?? '');
+  };
+
+  const saveEditedTable = (event: FormEvent) => {
+    event.preventDefault();
+    if (!editingTable) return;
+    const name = editTableName.trim();
     if (!name) return;
-    const description = window.prompt('Description de la table :', table.description ?? '') ?? table.description ?? '';
-    if (tables.some((item) => item.id !== table.id && item.name.toLocaleLowerCase('fr') === name.toLocaleLowerCase('fr'))) {
+    if (tables.some((item) => item.id !== editingTable.id && item.name.toLocaleLowerCase('fr') === name.toLocaleLowerCase('fr'))) {
       notify('Une table porte déjà ce nom.', 'error');
       return;
     }
-    const updated = { ...table, name, description: description.trim() };
-    setTables((current) => current.map((item) => item.id === table.id ? updated : item));
+    const updated = { ...editingTable, name, description: editTableDescription.trim() };
+    setTables((current) => current.map((item) => item.id === editingTable.id ? updated : item));
     void saveTableRecord(updated).catch(() => notify('La table a été modifiée localement, mais la synchronisation a échoué.', 'error'));
-    notify('Table modifiée.');
+    setEditingTable(null);
+    setActiveTableId(null);
+    setPage('tables');
+    notify('Table modifiée. Retour à la liste des tables.');
   };
 
   const deleteTable = (table: GuestTable) => {
@@ -227,12 +241,7 @@ export default function App() {
       notify(`Impossible de supprimer cette table : ${assigned} invité(s) y sont encore affectés. Réaffecte-les d’abord.`, 'error');
       return;
     }
-    if (!window.confirm(`Première confirmation : supprimer la table « ${table.name} » ?`)) return;
-    if (!window.confirm(`Deuxième confirmation : cette suppression est définitive. Confirmer la suppression de « ${table.name} » ?`)) return;
-    setTables((current) => current.filter((item) => item.id !== table.id));
-    void deleteRecord(FIRESTORE_COLLECTIONS.tables, table.id).catch(() => notify('La suppression locale est faite, mais la synchronisation a échoué.', 'error'));
-    if (activeTableId === table.id) setActiveTableId(null);
-    notify('Table supprimée.', 'info');
+    setDeleteConfirmation({ type: 'table', item: table, stage: 1 });
   };
 
   const openAddGuest = (guest?: Guest) => {
@@ -347,12 +356,29 @@ export default function App() {
   }, []);
 
   const deleteGuest = (guest: Guest) => {
-    if (!window.confirm(`Première confirmation : supprimer l’invité « ${guest.displayName} » ?`)) return;
-    if (!window.confirm(`Deuxième confirmation : la suppression de « ${guest.displayName} » est définitive. Confirmer ?`)) return;
-    setGuests((current) => current.filter((item) => item.id !== guest.id));
-    void deleteRecord(FIRESTORE_COLLECTIONS.guests, guest.id).catch(() => undefined);
-    setDetailGuest(null);
-    notify('Invité supprimé du prototype.', 'info');
+    setDeleteConfirmation({ type: 'guest', item: guest, stage: 1 });
+  };
+
+  const advanceDeleteConfirmation = () => {
+    if (!deleteConfirmation) return;
+    if (deleteConfirmation.stage === 1) {
+      setDeleteConfirmation({ ...deleteConfirmation, stage: 2 });
+      return;
+    }
+    if (deleteConfirmation.type === 'table') {
+      const table = deleteConfirmation.item;
+      setTables((current) => current.filter((item) => item.id !== table.id));
+      void deleteRecord(FIRESTORE_COLLECTIONS.tables, table.id).catch(() => notify('La suppression locale est faite, mais la synchronisation a échoué.', 'error'));
+      if (activeTableId === table.id) setActiveTableId(null);
+      notify('Table supprimée.', 'info');
+    } else {
+      const guest = deleteConfirmation.item;
+      setGuests((current) => current.filter((item) => item.id !== guest.id));
+      void deleteRecord(FIRESTORE_COLLECTIONS.guests, guest.id).catch(() => notify('La suppression locale est faite, mais la synchronisation a échoué.', 'error'));
+      setDetailGuest(null);
+      notify('Invité supprimé.', 'info');
+    }
+    setDeleteConfirmation(null);
   };
 
   const downloadDemoInvitation = async (guest: Guest) => {
@@ -681,6 +707,8 @@ export default function App() {
       <main className="main-area"><header className="topbar"><div className="topbar-left"><span className="mobile-brand"><Heart size={19} /> Mes Invites</span><div className="breadcrumb-title"><span>Mes Invites</span><ChevronRight size={14} /><strong>{pageTitle}</strong></div></div><div className="topbar-actions"><span className="environment-pill"><span /> Démonstration</span><button className="icon-button notification-button" aria-label="Notifications" onClick={() => notify('Aucune nouvelle notification.', 'info')}><Bell size={18} /><i /></button><span className="topbar-divider" /><button className="profile-mini" onClick={() => void signOut(auth!)} title="Se déconnecter"><span className="profile-avatar">{(authUser.displayName || authUser.email || 'U').slice(0,1).toUpperCase()}</span><ChevronDown size={15} /></button></div></header>
         <div className="page-content">{page === 'dashboard' && renderDashboard()}{page === 'tables' && renderTables()}{page === 'guests' && renderGuests()}{page === 'invitations' && renderInvitations()}{page === 'templates' && renderTemplates()}{page === 'scanner' && renderScanner()}{page === 'history' && renderHistory()}{page === 'settings' && renderSettings()}<footer className="page-footer"><span>© 2026 Mes Invites</span><span><span className="footer-dot" /> Les données affichées sont simulées</span></footer></div>
       </main>
+      {editingTable && <Modal title="Modifier la table" description="Modifie les informations, puis tu reviendras à la liste de toutes les tables." onClose={() => setEditingTable(null)}><form onSubmit={saveEditedTable} className="form-stack"><label>Nom de la table<input autoFocus value={editTableName} onChange={(event) => setEditTableName(event.target.value)} required /></label><label>Description <span className="optional-label">Facultatif</span><input value={editTableDescription} onChange={(event) => setEditTableDescription(event.target.value)} placeholder="Ex. Famille et proches" /></label><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setEditingTable(null)}>Annuler</button><button type="submit" className="button button-primary"><Check size={16} /> Enregistrer</button></div></form></Modal>}
+      {deleteConfirmation && <Modal title={deleteConfirmation.stage === 1 ? "Confirmer la suppression" : "Confirmation définitive"} description={deleteConfirmation.stage === 1 ? "Cette action nécessite une seconde confirmation." : "Dernière vérification avant la suppression définitive."} onClose={() => setDeleteConfirmation(null)}><div className="delete-confirm-content"><span className="delete-confirm-icon"><AlertTriangle size={25} /></span><h3>{deleteConfirmation.stage === 1 ? "Veux-tu vraiment supprimer cet élément ?" : "Es-tu certain de vouloir continuer ?"}</h3><p>{deleteConfirmation.type === 'table' ? `Table : « ${deleteConfirmation.item.name} »` : `Invité : « ${deleteConfirmation.item.displayName} »`}</p><p className="delete-confirm-warning">{deleteConfirmation.stage === 1 ? "Aucune suppression n’a encore été effectuée." : "Cette suppression est définitive et ne peut pas être annulée."}</p><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setDeleteConfirmation(null)}>Annuler</button><button type="button" className="button button-danger-ghost" onClick={advanceDeleteConfirmation}><Trash2 size={16} /> {deleteConfirmation.stage === 1 ? "Continuer" : "Supprimer définitivement"}</button></div></div></Modal>}
       {tableModal && <Modal title="Créer une table" description="Définissez un nom clair pour retrouver facilement les invités." onClose={() => setTableModal(false)}><form onSubmit={saveTable} className="form-stack"><label>Nom ou numéro de table<input autoFocus value={newTableName} onChange={(event) => setNewTableName(event.target.value)} placeholder="Ex. Table 03" required /></label><label>Description <span className="optional-label">Facultatif</span><input value={newTableDescription} onChange={(event) => setNewTableDescription(event.target.value)} placeholder="Ex. Famille et proches" /></label><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setTableModal(false)}>Annuler</button><button type="submit" className="button button-primary"><Plus size={16} /> Créer la table</button></div></form></Modal>}
       {guestModal && <Modal title={editingGuest ? 'Modifier l’invité' : 'Ajouter un invité'} description={activeTable ? `Table sélectionnée : ${activeTable.name}` : 'L’invité doit être affecté à une table existante.'} onClose={() => setGuestModal(false)}><form onSubmit={saveGuest} className="form-stack"><label>Nom de l’invité ou des invités<input autoFocus value={guestName} onChange={(event) => setGuestName(event.target.value)} placeholder={kind === 'couple' ? 'Jean et Marie Mukendi' : 'Jean Mukendi'} required /></label><label>Type d’invitation<select value={kind} onChange={(event) => setKind(event.target.value as InvitationKind)}><option value="individual">Personne seule</option><option value="couple">Couple</option></select></label>{kind === 'individual' && <label>Civilité<select value={salutation} onChange={(event) => setSalutation(event.target.value as Salutation)}><option>Monsieur</option><option>Madame</option><option>Mademoiselle</option></select></label>}<div className="name-preview"><span>APERÇU DU NOM</span><strong>{guestName.trim() ? makeDisplayName(guestName, salutation, kind) : 'Le nom apparaîtra ici'}</strong></div><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setGuestModal(false)}>Annuler</button><button type="submit" className="button button-primary"><Check size={16} /> {editingGuest ? 'Enregistrer' : 'Ajouter l’invité'}</button></div></form></Modal>}
       {detailGuest && <Modal title="Détail de l’invitation" description="Fiche invité, QR unique et invitation personnalisée." onClose={() => setDetailGuest(null)} wide><div className="detail-layout"><div className="detail-invite-preview" style={{ position: 'relative', overflow: 'hidden', padding: 0, background: templateImage ? 'transparent' : undefined, aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4', width: '100%', containerType: 'inline-size' }}>{templateImage ? <><img src={templateImage} alt="Template original de l’invitation" style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }} /><strong className="template-preview-name" style={{ position: 'absolute', left: `${templateNameX}%`, top: `${templateNameY}%`, transform: 'translate(-50%, -50%)', fontSize: `${(fitNameFontSize(detailGuest.displayName, templateImageDimensions?.width ?? 1000) / (templateImageDimensions?.width ?? 1000)) * 100}cqw`, maxWidth: `${templateNameWidth}%`, overflowWrap: 'anywhere', wordBreak: 'break-word', color: templateNameColor, fontFamily: templateNameFont, textShadow: templateNameEffect === 'shadow' ? '0 1px 3px #ffffffcc' : templateNameEffect === 'glow' ? `0 0 8px ${templateNameColor}` : 'none', WebkitTextStroke: templateNameEffect === 'outline' ? '0.6px white' : '0px transparent' }}>{detailGuest.displayName}</strong>{detailGuest.token && <div className="template-preview-qr" style={{ position: 'absolute', left: `${templateQrX}%`, top: `${templateQrY}%`, width: `${templateQrSize}%`, transform: 'translate(-50%, -50%)' }}><QRCodeSVG value={detailGuest.token} size={256} level="H" includeMargin /></div>}</> : <div className="template-preview-empty"><FileImage size={28} /><strong>Aucun template importé</strong></div>}</div><div className="detail-meta"><div className="detail-meta-row"><span>Table</span><strong>{tables.find((table) => table.id === detailGuest.tableId)?.name ?? 'Table inconnue'}</strong></div><div className="detail-meta-row"><span>Type</span><strong>{detailGuest.kind === 'couple' ? 'Couple' : 'Personne seule'}</strong></div><div className="detail-meta-row"><span>Invitation</span><strong>{statusLabel(detailGuest.invitationStatus)}</strong></div><div className="detail-meta-row"><span>Entrée</span><strong>{statusLabel(detailGuest.checkinStatus)}</strong></div><div className="detail-meta-row"><span>Identifiant</span><code>{detailGuest.id}</code></div><div className="detail-actions">{detailGuest.invitationStatus !== 'generated' && <button className="button button-primary button-wide" onClick={() => generateInvitation(detailGuest.id)}><QrCode size={16} /> Générer le QR code</button>}{detailGuest.token && <button className="button button-secondary button-wide" onClick={() => void downloadDemoInvitation(detailGuest)}><Download size={16} /> Télécharger l’invitation (PNG)</button>}<button className="button button-secondary button-wide" onClick={() => { setDetailGuest(null); openAddGuest(detailGuest); }}><Pencil size={15} /> Modifier la fiche</button><button className="button button-danger-ghost button-wide" onClick={() => deleteGuest(detailGuest)}><Trash2 size={15} /> Supprimer l’invité</button><p className="muted-copy small-note">Le PNG téléchargé reprend le template et les positions enregistrées dans cet éditeur.</p></div></div></div></Modal>}
