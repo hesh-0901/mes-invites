@@ -735,7 +735,6 @@ export default function App() {
     </>
   );
 
-  if (authUser && isSuperAdmin && page === 'settings' && adminRequests.length === 0 && !requestsLoading) { /* loaded on demand by button */ }
   if (!authReady || (authUser && accessState === 'checking')) return <div className="auth-loading">Chargement sécurisé…</div>;
   if (!authUser) return <AuthScreen />;
   if (accessState !== 'approved') return <main className="auth-screen"><section className="auth-card"><div className="auth-brand"><span className="auth-mark"><ShieldCheck size={24}/></span><span>Mes Invites<small>CONTRÔLE DES ACCÈS</small></span></div><div className="auth-intro"><span className="eyebrow">ESPACE SÉCURISÉ</span><h1>{accessState === 'pending' ? 'Demande en attente' : accessState === 'rejected' ? 'Demande refusée' : 'Accès indisponible'}</h1><p>{accessState === 'pending' ? 'Ton adresse e-mail est vérifiée. Un super administrateur doit approuver ton compte avant que tu puisses accéder à ton espace.' : accessState === 'rejected' ? 'La demande d’accès à ce compte a été refusée. Contacte le support si tu penses qu’il s’agit d’une erreur.' : 'Le profil de ce compte ne peut pas être vérifié. Réessaie plus tard ou contacte le support.'}</p></div><button className="button button-secondary auth-submit" onClick={() => auth && void signOut(auth)}>Se déconnecter</button></section></main>;
