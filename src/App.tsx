@@ -63,6 +63,17 @@ export default function App() {
   const [guestName, setGuestName] = useState('');
   const [salutation, setSalutation] = useState<Salutation>('Monsieur');
   const [kind, setKind] = useState<InvitationKind>('individual');
+  const [templateImage, setTemplateImage] = useState<string>(() => {
+    try { return window.localStorage.getItem('mes-invites-template-image') ?? ''; } catch { return ''; }
+  });
+  const [templateNameX, setTemplateNameX] = useState(() => Number(window.localStorage.getItem('mes-invites-template-name-x') ?? 50));
+  const [templateNameY, setTemplateNameY] = useState(() => Number(window.localStorage.getItem('mes-invites-template-name-y') ?? 55));
+  const [templateQrX, setTemplateQrX] = useState(() => Number(window.localStorage.getItem('mes-invites-template-qr-x') ?? 78));
+  const [templateQrY, setTemplateQrY] = useState(() => Number(window.localStorage.getItem('mes-invites-template-qr-y') ?? 82));
+  const [templateQrSize, setTemplateQrSize] = useState(() => Number(window.localStorage.getItem('mes-invites-template-qr-size') ?? 14));
+  const [templateNameSize, setTemplateNameSize] = useState(() => Number(window.localStorage.getItem('mes-invites-template-name-size') ?? 3));
+  const [templateSampleName, setTemplateSampleName] = useState('Nom de l’invité');
+
   const [cameraActive, setCameraActive] = useState(false);
   const [scanValue, setScanValue] = useState('');
   const [scanResult, setScanResult] = useState<{ state: 'valid' | 'used' | 'invalid'; guest?: Guest; message: string } | null>(null);
@@ -319,10 +330,52 @@ export default function App() {
     </>
   );
 
+  const saveTemplateSettings = () => {
+    try {
+      window.localStorage.setItem('mes-invites-template-name-x', String(templateNameX));
+      window.localStorage.setItem('mes-invites-template-name-y', String(templateNameY));
+      window.localStorage.setItem('mes-invites-template-qr-x', String(templateQrX));
+      window.localStorage.setItem('mes-invites-template-qr-y', String(templateQrY));
+      window.localStorage.setItem('mes-invites-template-qr-size', String(templateQrSize));
+      window.localStorage.setItem('mes-invites-template-name-size', String(templateNameSize));
+      notify('Positionnement du template enregistré sur cet appareil.');
+    } catch { notify('Impossible d’enregistrer les paramètres du template.', 'error'); }
+  };
+
+  const importTemplate = (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { notify('Choisis une image PNG, JPG ou WebP.', 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const image = String(reader.result ?? '');
+      try {
+        window.localStorage.setItem('mes-invites-template-image', image);
+        setTemplateImage(image);
+        notify('Template importé sur cet appareil.');
+      } catch {
+        notify('Image trop volumineuse pour le stockage local. Utilise un PNG ou JPG optimisé.', 'error');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const renderTemplates = () => (
     <>
-      <section className="welcome-row"><div><div className="eyebrow">DESIGN ORIGINAL</div><h2>Templates graphiques</h2><p>Le visuel source sera préservé lors de la personnalisation.</p></div></section>
-      <section className="template-empty"><div className="template-art"><div className="template-art-inner"><Heart size={26} /><span>VOTRE INVITATION</span><i /><small>Template à importer</small></div></div><div className="template-empty-copy"><span className="status-pill status-neutral"><span className="status-dot" /> En attente du fichier</span><h3>Le template original sera intégré ici.</h3><p>Les dimensions, les coordonnées du QR code et la zone du nom seront déterminées après inspection du fichier original. Aucun élément graphique ne sera déplacé arbitrairement.</p><div className="template-meta"><span><FileImage size={16} /> Format à confirmer</span><span><QrCode size={16} /> Zone QR à analyser</span></div><button className="button button-secondary" onClick={() => notify('Ajoute le template au repository après avoir fourni le fichier original.', 'info')}>Consulter les consignes <ExternalLink size={15} /></button></div></section>
+      <section className="welcome-row"><div><div className="eyebrow">PERSONNALISATION</div><h2>Templates d’invitation</h2><p>Importe ton visuel et règle précisément la position du nom et du QR code.</p></div><label className="button button-primary template-upload-button"><Plus size={16} /> Importer un template<input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => importTemplate(event.target.files?.[0])} /></label></section>
+      <section className="template-editor-grid">
+        <div className="panel template-controls">
+          <div className="panel-heading"><div><h3>Configuration du modèle</h3><p>Les positions sont exprimées en pourcentage du visuel.</p></div><Settings size={18} className="muted-icon" /></div>
+          <label className="template-field">Nom de prévisualisation<input value={templateSampleName} onChange={(event) => setTemplateSampleName(event.target.value)} placeholder="Nom de l’invité" /></label>
+          <div className="template-control-group"><strong>Position du nom</strong><label>Horizontal — {templateNameX}%<input type="range" min="0" max="100" value={templateNameX} onChange={(e) => setTemplateNameX(Number(e.target.value))} /></label><label>Vertical — {templateNameY}%<input type="range" min="0" max="100" value={templateNameY} onChange={(e) => setTemplateNameY(Number(e.target.value))} /></label><label>Taille du texte — {templateNameSize}% de la largeur<input type="range" min="1" max="7" step="0.25" value={templateNameSize} onChange={(e) => setTemplateNameSize(Number(e.target.value))} /></label></div>
+          <div className="template-control-group"><strong>Position du QR code</strong><label>Horizontal — {templateQrX}%<input type="range" min="0" max="100" value={templateQrX} onChange={(e) => setTemplateQrX(Number(e.target.value))} /></label><label>Vertical — {templateQrY}%<input type="range" min="0" max="100" value={templateQrY} onChange={(e) => setTemplateQrY(Number(e.target.value))} /></label><label>Taille — {templateQrSize}% de la largeur<input type="range" min="6" max="28" step="1" value={templateQrSize} onChange={(e) => setTemplateQrSize(Number(e.target.value))} /></label></div>
+          <div className="modal-actions"><button className="button button-secondary" onClick={() => { setTemplateNameX(50); setTemplateNameY(55); setTemplateQrX(78); setTemplateQrY(82); setTemplateQrSize(14); setTemplateNameSize(3); }}>Réinitialiser</button><button className="button button-primary" onClick={saveTemplateSettings}><Check size={16} /> Enregistrer</button></div>
+          <p className="muted-copy small-note"><LockKeyhole size={14} /> Le modèle et ses réglages sont enregistrés dans ce navigateur uniquement. Ils ne sont pas encore synchronisés dans le cloud.</p>
+        </div>
+        <div className="panel template-preview-panel"><div className="panel-heading"><div><h3>Aperçu en direct</h3><p>Exemple de placement du nom et du QR code.</p></div><Eye size={18} className="muted-icon" /></div>
+          {templateImage ? <div className="template-live-preview" style={{ backgroundImage: `url("${templateImage}")` }}><div className="template-preview-name" style={{ left: `${templateNameX}%`, top: `${templateNameY}%`, fontSize: `${templateNameSize}%` }}>{templateSampleName || 'Nom de l’invité'}</div><div className="template-preview-qr" style={{ left: `${templateQrX}%`, top: `${templateQrY}%`, width: `${templateQrSize}%` }}><QRCodeSVG value="PREVIEW-QR-MES-INVITES" size={128} level="H" includeMargin /></div></div> : <div className="template-preview-empty"><FileImage size={34} /><strong>Importe ton modèle pour commencer</strong><span>Formats acceptés : PNG, JPG et WebP. L’aperçu conserve le ratio de l’image.</span></div>}
+          {templateImage && <button className="button button-danger-ghost" onClick={() => { window.localStorage.removeItem('mes-invites-template-image'); setTemplateImage(''); notify('Template retiré de cet appareil.', 'info'); }}><Trash2 size={15} /> Retirer ce template</button>}
+        </div>
+      </section>
     </>
   );
 
