@@ -1,0 +1,13 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Mes Invites intentionally starts locked down.
+    // The application uses a custom password model without Firebase Auth,
+    // so client-side Firestore access must remain denied until a trusted
+    // server endpoint validates access and performs authorized operations.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
