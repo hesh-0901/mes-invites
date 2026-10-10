@@ -244,19 +244,26 @@ export default function App() {
     if (!guest || guest.invitationStatus !== 'generated') {
       setScanResult({ state: 'invalid', message: 'Invitation inconnue, non générée ou désactivée.' });
       setScanValue(code);
-      setCheckins((current) => [{ id: makeId('scan'), guestId: guest?.id ?? '', guestName: guest?.displayName ?? 'Invitation inconnue', tableName: tables.find((table) => table.id === guest?.tableId)?.name ?? '—', result: 'invalid', timestamp: new Date().toISOString(), operator: 'Accueil — démonstration' }, ...current]);
+      const entry: Checkin = { id: makeId('scan'), guestId: guest?.id ?? '', guestName: guest?.displayName ?? 'Invitation inconnue', tableName: tables.find((table) => table.id === guest?.tableId)?.name ?? '—', result: 'invalid', timestamp: new Date().toISOString(), operator: 'Accueil — démonstration' };
+      setCheckins((current) => [entry, ...current]);
+      void saveCheckinRecord(entry).catch(() => undefined);
       return;
     }
     setScanValue(code);
     if (guest.checkinStatus === 'checked-in') {
       setScanResult({ state: 'used', guest, message: 'Cette invitation a déjà été utilisée.' });
-      setCheckins((current) => [{ id: makeId('scan'), guestId: guest.id, guestName: guest.displayName, tableName: tables.find((table) => table.id === guest.tableId)?.name ?? '—', result: 'already-used', timestamp: new Date().toISOString(), operator: 'Accueil — démonstration' }, ...current]);
+      const entry: Checkin = { id: makeId('scan'), guestId: guest.id, guestName: guest.displayName, tableName: tables.find((table) => table.id === guest.tableId)?.name ?? '—', result: 'already-used', timestamp: new Date().toISOString(), operator: 'Accueil — démonstration' };
+      setCheckins((current) => [entry, ...current]);
+      void saveCheckinRecord(entry).catch(() => undefined);
       return;
     }
     const timestamp = new Date().toISOString();
     setGuests((current) => current.map((item) => item.id === guest.id ? { ...item, checkinStatus: 'checked-in', checkedInAt: timestamp } : item));
     const tableName = tables.find((table) => table.id === guest.tableId)?.name ?? '—';
-    setCheckins((current) => [{ id: makeId('checkin'), guestId: guest.id, guestName: guest.displayName, tableName, result: 'accepted', timestamp, operator: 'Accueil — démonstration' }, ...current]);
+    const entry: Checkin = { id: makeId('checkin'), guestId: guest.id, guestName: guest.displayName, tableName, result: 'accepted', timestamp, operator: 'Accueil — démonstration' };
+    setCheckins((current) => [entry, ...current]);
+    void saveCheckinRecord(entry).catch(() => undefined);
+    void saveGuestRecord({ ...guest, checkinStatus: 'checked-in', checkedInAt: timestamp }).catch(() => undefined);
     setScanResult({ state: 'valid', guest: { ...guest, checkinStatus: 'checked-in', checkedInAt: timestamp }, message: 'Entrée enregistrée en mode démonstration.' });
     notify('Entrée enregistrée dans les données de démonstration.', 'success');
   }, [tables]);
