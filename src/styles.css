@@ -438,3 +438,45 @@ tbody td>strong{font-weight:600;color:#453c41}
   .delete-confirm-content .modal-actions{flex-direction:column-reverse}
   .delete-confirm-content .modal-actions .button{width:100%;min-height:45px}
 }
+
+
+/* Mobile-first usability: prevent iOS input zoom and reclaim viewport space */
+@media (max-width: 600px) {
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  input, select, textarea, button { font-size: 16px; }
+  input, select, textarea { min-height: 42px; }
+  .page-content { padding: 14px 10px 12px; }
+  .panel { padding: 11px; margin-bottom: 10px; border-radius: 10px; }
+  .panel-heading { gap: 8px; margin-bottom: 12px; }
+  .stat-card { padding: 10px; }
+  .stat-grid { gap: 7px; }
+  .welcome-row { gap: 8px; margin-bottom: 13px; }
+  .welcome-row h2 { font-size: 22px; }
+  .table-overview-card { padding: 12px; }
+  .modal-backdrop { padding: 8px; }
+  .modal { padding: 14px; max-height: calc(100dvh - 16px); border-radius: 12px; }
+  .modal-heading { margin-bottom: 14px; }
+  .form-stack { gap: 11px; }
+  .form-stack > label { gap: 5px; }
+  .modal-actions { gap: 7px; }
+  .modal-actions .button { padding: 10px 11px; }
+  .auth-screen { min-height: 100dvh; padding: 12px; align-items: start; }
+  .auth-card { padding: 18px 14px; border-radius: 13px; }
+  .auth-intro { margin: 20px 0 16px; }
+  .auth-intro h1 { font-size: 26px; }
+  .auth-form { gap: 11px; }
+  .auth-form input { font-size: 16px; min-height: 44px; }
+  .detail-layout { gap: 14px; }
+  .detail-invite-preview { max-width: 210px; }
+  .page-footer { padding-top: 14px; }
+}
+@media (max-width: 380px) {
+  .main-area { margin-left: 52px; }
+  .sidebar { width: 52px; }
+  .page-content { padding-left: 8px; padding-right: 8px; }
+  .panel { padding: 9px; }
+  .stat-card { padding: 8px; }
+  .stat-value { font-size: 22px; }
+  .modal { padding: 12px; }
+  .auth-card { padding: 16px 12px; }
+}
