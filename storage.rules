@@ -1,0 +1,10 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Keep files private until a trusted server-side access model is configured.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
