@@ -356,7 +356,7 @@ export default function App() {
     const entry: Checkin = { id: makeId('checkin'), guestId: guest.id, guestName: guest.displayName, tableName, result: 'accepted', timestamp, operator: 'Accueil — démonstration' };
     setCheckins((current) => [entry, ...current]);
     void saveCheckinRecord(projectId!, entry).catch(() => undefined);
-    void saveGuestRecord({ ...guest, checkinStatus: 'checked-in', checkedInAt: timestamp }).catch(() => undefined);
+    void saveGuestRecord(projectId!, { ...guest, checkinStatus: 'checked-in', checkedInAt: timestamp }).catch(() => undefined);
     setScanResult({ state: 'valid', guest: { ...guest, checkinStatus: 'checked-in', checkedInAt: timestamp }, message: 'Entrée enregistrée en mode démonstration.' });
     notify('Entrée enregistrée dans les données de démonstration.', 'success');
   }, [tables]);
