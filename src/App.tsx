@@ -338,6 +338,7 @@ export default function App() {
       });
       const width = background.naturalWidth;
       const height = background.naturalHeight;
+      if (!width || !height) throw new Error('Le fichier du template est vide ou illisible.');
       const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
@@ -378,16 +379,32 @@ export default function App() {
       } finally {
         URL.revokeObjectURL(qrUrl);
       }
-      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error('Export PNG impossible.')), 'image/png'));
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        try {
+          canvas.toBlob((result) => result
+            ? resolve(result)
+            : reject(new Error('Le navigateur n’a pas pu exporter le PNG.')), 'image/png');
+        } catch (error) {
+          reject(error instanceof Error ? error : new Error('Export PNG impossible.'));
+        }
+      });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = `mes-invites-${guest.id}.png`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(url);
+      link.remove();
+      // Keep the temporary file alive briefly so the browser can begin downloading it.
+      window.setTimeout(() => URL.revokeObjectURL(url), 10000);
       notify('Invitation personnalisée téléchargée en PNG.');
-    } catch {
-      notify('Impossible de composer le PNG. Vérifie que le template est bien accessible.', 'error');
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Erreur inconnue.';
+      const corsError = /tainted|cross-origin|security|cross origin/i.test(detail);
+      notify(corsError
+        ? 'Le serveur du template bloque son export. Vérifie les autorisations CORS de l’image hébergée.'
+        : `Composition PNG impossible : ${detail}`, 'error');
     }
   };
 
