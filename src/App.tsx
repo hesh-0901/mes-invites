@@ -847,7 +847,7 @@ function AuthScreen() {
           ? 'Demande de compte administrateur envoyée. Vérifie ton e-mail ; ton accès sera activé après approbation par le super administrateur.'
           : 'Demande de collaboration envoyée. Vérifie ton e-mail ; l’administrateur de cet espace devra ensuite approuver ton accès.');
         await signOut(auth);
-      }
+      } else {
         const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
         if (!credential.user.emailVerified) {
           await signOut(auth);
