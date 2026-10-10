@@ -73,7 +73,30 @@ export default function App() {
   const [templateQrY, setTemplateQrY] = useState(() => Number(window.localStorage.getItem('mes-invites-template-qr-y') ?? 82));
   const [templateQrSize, setTemplateQrSize] = useState(() => Number(window.localStorage.getItem('mes-invites-template-qr-size') ?? 14));
   const [templateNameSize, setTemplateNameSize] = useState(() => Number(window.localStorage.getItem('mes-invites-template-name-size') ?? 3));
+  const [templateNameWidth, setTemplateNameWidth] = useState(() => Number(window.localStorage.getItem('mes-invites-template-name-width') ?? 60));
+  const [templateImageDimensions, setTemplateImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const [templateSampleName, setTemplateSampleName] = useState('Nom de l’invité');
+
+  useEffect(() => {
+    if (!templateImage) { setTemplateImageDimensions(null); return; }
+    const image = new Image();
+    image.onload = () => setTemplateImageDimensions({ width: image.naturalWidth, height: image.naturalHeight });
+    image.src = templateImage;
+  }, [templateImage]);
+
+  const fitNameFontSize = (text: string, canvasWidth: number) => {
+    const measure = document.createElement('canvas').getContext('2d');
+    if (!measure) return Math.max(12, canvasWidth * templateNameSize / 100);
+    const maxWidth = canvasWidth * templateNameWidth / 100;
+    let size = Math.max(12, canvasWidth * templateNameSize / 100);
+    const minimum = Math.max(8, canvasWidth * 0.012);
+    while (size > minimum) {
+      measure.font = `600 ${size}px Georgia, serif`;
+      if (measure.measureText(text).width <= maxWidth) break;
+      size -= 1;
+    }
+    return Math.max(minimum, size);
+  };
 
   const [cameraActive, setCameraActive] = useState(false);
   const [scanValue, setScanValue] = useState('');
@@ -259,14 +282,14 @@ export default function App() {
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('Canvas indisponible.');
       ctx.drawImage(background, 0, 0, width, height);
-      const fontSize = Math.max(12, width * templateNameSize / 100);
+      const fontSize = fitNameFontSize(guest.displayName, width);
       ctx.font = `600 ${fontSize}px Georgia, serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#762d40';
       ctx.shadowColor = '#ffffffcc';
       ctx.shadowBlur = Math.max(0, width * 0.002);
-      ctx.fillText(guest.displayName, width * templateNameX / 100, height * templateNameY / 100, width * 0.85);
+      ctx.fillText(guest.displayName, width * templateNameX / 100, height * templateNameY / 100, width * templateNameWidth / 100);
       ctx.shadowBlur = 0;
       const qrSvg = renderToStaticMarkup(<QRCodeSVG value={guest.token} size={512} level="H" includeMargin />);
       const qrUrl = URL.createObjectURL(new Blob([qrSvg], { type: 'image/svg+xml;charset=utf-8' }));
@@ -387,6 +410,7 @@ export default function App() {
       window.localStorage.setItem('mes-invites-template-qr-y', String(templateQrY));
       window.localStorage.setItem('mes-invites-template-qr-size', String(templateQrSize));
       window.localStorage.setItem('mes-invites-template-name-size', String(templateNameSize));
+      window.localStorage.setItem('mes-invites-template-name-width', String(templateNameWidth));
       notify('Positionnement du template enregistré sur cet appareil.');
     } catch { notify('Impossible d’enregistrer les paramètres du template.', 'error'); }
   };
@@ -422,13 +446,13 @@ export default function App() {
         <div className="panel template-controls">
           <div className="panel-heading"><div><h3>Configuration du modèle</h3><p>Les positions sont exprimées en pourcentage du visuel.</p></div><Settings size={18} className="muted-icon" /></div>
           <label className="template-field">Nom de prévisualisation<input value={templateSampleName} onChange={(event) => setTemplateSampleName(event.target.value)} placeholder="Nom de l’invité" /></label>
-          <div className="template-control-group"><strong>Position du nom</strong><label>Horizontal — {templateNameX}%<input type="range" min="0" max="100" value={templateNameX} onChange={(e) => setTemplateNameX(Number(e.target.value))} /></label><label>Vertical — {templateNameY}%<input type="range" min="0" max="100" value={templateNameY} onChange={(e) => setTemplateNameY(Number(e.target.value))} /></label><label>Taille du texte — {templateNameSize}% de la largeur<input type="range" min="1" max="7" step="0.25" value={templateNameSize} onChange={(e) => setTemplateNameSize(Number(e.target.value))} /></label></div>
+          <div className="template-control-group"><strong>Position du nom</strong><label>Horizontal — {templateNameX}%<input type="range" min="0" max="100" value={templateNameX} onChange={(e) => setTemplateNameX(Number(e.target.value))} /></label><label>Vertical — {templateNameY}%<input type="range" min="0" max="100" value={templateNameY} onChange={(e) => setTemplateNameY(Number(e.target.value))} /></label><label>Taille maximale du texte — {templateNameSize}% de la largeur<input type="range" min="1" max="7" step="0.25" value={templateNameSize} onChange={(e) => setTemplateNameSize(Number(e.target.value))} /></label><label>Largeur réservée au nom — {templateNameWidth}%<input type="range" min="10" max="95" step="1" value={templateNameWidth} onChange={(e) => setTemplateNameWidth(Number(e.target.value))} /></label><small className="muted-copy">Les noms longs sont automatiquement réduits pour rester dans cette zone.</small></div>
           <div className="template-control-group"><strong>Position du QR code</strong><label>Horizontal — {templateQrX}%<input type="range" min="0" max="100" value={templateQrX} onChange={(e) => setTemplateQrX(Number(e.target.value))} /></label><label>Vertical — {templateQrY}%<input type="range" min="0" max="100" value={templateQrY} onChange={(e) => setTemplateQrY(Number(e.target.value))} /></label><label>Taille — {templateQrSize}% de la largeur<input type="range" min="6" max="28" step="1" value={templateQrSize} onChange={(e) => setTemplateQrSize(Number(e.target.value))} /></label></div>
-          <div className="modal-actions"><button className="button button-secondary" onClick={() => { setTemplateNameX(50); setTemplateNameY(55); setTemplateQrX(78); setTemplateQrY(82); setTemplateQrSize(14); setTemplateNameSize(3); }}>Réinitialiser</button><button className="button button-primary" onClick={saveTemplateSettings}><Check size={16} /> Enregistrer</button></div>
+          <div className="modal-actions"><button className="button button-secondary" onClick={() => { setTemplateNameX(50); setTemplateNameY(55); setTemplateQrX(78); setTemplateQrY(82); setTemplateQrSize(14); setTemplateNameSize(3); setTemplateNameWidth(60); }}>Réinitialiser</button><button className="button button-primary" onClick={saveTemplateSettings}><Check size={16} /> Enregistrer</button></div>
           <p className="muted-copy small-note"><LockKeyhole size={14} /> Le modèle et ses réglages sont enregistrés dans ce navigateur uniquement. Ils ne sont pas encore synchronisés dans le cloud.</p>
         </div>
         <div className="panel template-preview-panel"><div className="panel-heading"><div><h3>Aperçu en direct</h3><p>Exemple de placement du nom et du QR code.</p></div><Eye size={18} className="muted-icon" /></div>
-          {templateImage ? <div className="template-live-preview" style={{ backgroundImage: `url("${templateImage}")` }}><div className="template-preview-name" style={{ left: `${templateNameX}%`, top: `${templateNameY}%`, fontSize: `${templateNameSize}%` }}>{templateSampleName || 'Nom de l’invité'}</div><div className="template-preview-qr" style={{ left: `${templateQrX}%`, top: `${templateQrY}%`, width: `${templateQrSize}%` }}><QRCodeSVG value="PREVIEW-QR-MES-INVITES" size={128} level="H" includeMargin /></div></div> : <div className="template-preview-empty"><FileImage size={34} /><strong>Importe ton modèle pour commencer</strong><span>Formats acceptés : PNG, JPG et WebP. L’aperçu conserve le ratio de l’image.</span></div>}
+          {templateImage ? <div className="template-live-preview" style={{ backgroundImage: `url("${templateImage}")`, aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4' }}><div className="template-preview-name" style={{ left: `${templateNameX}%`, top: `${templateNameY}%`, fontSize: `${templateNameSize}cqw`, maxWidth: `${templateNameWidth}%` }}>{templateSampleName || 'Nom de l’invité'}</div><div className="template-preview-qr" style={{ left: `${templateQrX}%`, top: `${templateQrY}%`, width: `${templateQrSize}%` }}><QRCodeSVG value="PREVIEW-QR-MES-INVITES" size={128} level="H" includeMargin /></div></div> : <div className="template-preview-empty"><FileImage size={34} /><strong>Importe ton modèle pour commencer</strong><span>Formats acceptés : PNG, JPG et WebP. L’aperçu conserve le ratio de l’image.</span></div>}
           {templateImage && <button className="button button-danger-ghost" onClick={() => { window.localStorage.removeItem('mes-invites-template-image'); setTemplateImage(''); notify('Template retiré de cet appareil.', 'info'); }}><Trash2 size={15} /> Retirer ce template</button>}
         </div>
       </section>
