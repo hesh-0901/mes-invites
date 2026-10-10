@@ -15,7 +15,7 @@ service cloud.firestore {
     }
 
     function isSuperAdmin() {
-      return hasProfile() && userProfile().super_admin == true;
+      return signedIn() && hasProfile() && userProfile().super_admin == true;
     }
 
     function isProjectAdmin(projectId) {
@@ -85,6 +85,17 @@ service cloud.firestore {
           && request.resource.data.projectId == resource.data.projectId
           && request.resource.data.super_admin == false
           && request.resource.data.status in ['approved', 'rejected'])
+        || (resource.data.role == 'collaborator'
+          && resource.data.status == 'approved'
+          && isProjectAdmin(resource.data.projectId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['permissions', 'permissionsUpdatedAt', 'permissionsUpdatedBy'])
+          && request.resource.data.permissions is list
+          && request.resource.data.permissions.size() <= 8
+          && request.resource.data.permissions.toSet().hasOnly([
+            'dashboard', 'tables', 'guests', 'invitations',
+            'scanner', 'history', 'templates', 'settings'
+          ]))
       );
       allow delete: if isSuperAdmin();
     }
