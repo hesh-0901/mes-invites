@@ -344,3 +344,14 @@ tbody td>strong{font-weight:600;color:#453c41}
 .auth-success{background:#edf8ef;color:#2d754b;border:1px solid #d6ecdc}
 .auth-loading{min-height:100vh;display:grid;place-items:center;background:#faf8f7;color:#786d72;font-size:13px}
 @media(max-width:420px){.auth-name-grid{grid-template-columns:1fr}.auth-card{padding:23px}}
+
+/* Styled destructive-action confirmation dialogs */
+.delete-confirm-content{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 4px 2px;gap:12px}
+.delete-confirm-icon{display:grid;place-items:center;width:58px;height:58px;border-radius:18px;background:linear-gradient(145deg,#fff0ec,#ffe1dc);color:#bd4147;border:1px solid #f5c9c5;box-shadow:0 8px 22px #a83b4012}
+.delete-confirm-content h3{margin:2px 0 0;font-size:17px;line-height:1.35;color:#352a2e}
+.delete-confirm-content p{margin:0;color:#75686d;font-size:13px;line-height:1.55;overflow-wrap:anywhere}
+.delete-confirm-content .delete-confirm-warning{width:100%;padding:11px 13px;border-radius:10px;background:#fff8f3;border:1px solid #f4dfd2;color:#98553c;font-size:12px}
+.delete-confirm-content .modal-actions{width:100%;margin-top:7px;display:flex;gap:10px}
+.delete-confirm-content .modal-actions .button{flex:1;justify-content:center;min-height:42px}
+.button-danger-ghost{background:#fff0ef!important;color:#b33e46!important;border:1px solid #f0c8c9!important}
+.button-danger-ghost:hover{background:#ffe3e2!important;border-color:#e9abad!important}
