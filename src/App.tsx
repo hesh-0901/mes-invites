@@ -172,7 +172,7 @@ export default function App() {
     const code = raw.trim();
     if (!code) return;
     const guest = guestsRef.current.find((item) => item.token === code || item.id === code);
-    if (!guest || guest.invitationStatus !== 'generated' || guest.invitationStatus === 'disabled') {
+    if (!guest || guest.invitationStatus !== 'generated') {
       setScanResult({ state: 'invalid', message: 'Invitation inconnue, non générée ou désactivée.' });
       setScanValue(code);
       setCheckins((current) => [{ id: makeId('scan'), guestId: guest?.id ?? '', guestName: guest?.displayName ?? 'Invitation inconnue', tableName: tables.find((table) => table.id === guest?.tableId)?.name ?? '—', result: 'invalid', timestamp: new Date().toISOString(), operator: 'Accueil — démonstration' }, ...current]);
