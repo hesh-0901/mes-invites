@@ -355,3 +355,4 @@ tbody td>strong{font-weight:600;color:#453c41}
 .delete-confirm-content .modal-actions .button{flex:1;justify-content:center;min-height:42px}
 .button-danger-ghost{background:#fff0ef!important;color:#b33e46!important;border:1px solid #f0c8c9!important}
 .button-danger-ghost:hover{background:#ffe3e2!important;border-color:#e9abad!important}
+.delete-confirm-item-name{width:100%;padding:14px 16px!important;border:1px solid #eee0e2;border-radius:12px;background:#fbf7f7;color:#4a2732!important;font-size:15px!important;font-weight:750;overflow-wrap:anywhere}
