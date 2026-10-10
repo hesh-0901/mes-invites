@@ -751,6 +751,7 @@ export default function App() {
   };
 
   const [settingsTab, setSettingsTab] = useState<'general' | 'event' | 'template' | 'access'>('general');
+  const [showProjectKey, setShowProjectKey] = useState(false);
 
   const renderSettings = () => (
     <>
@@ -763,11 +764,19 @@ export default function App() {
       </div>
       {settingsTab === 'general' && <>
         {currentProfile?.role === 'admin' && <section className="panel project-key-panel">
-          <div className="panel-heading"><div><h3>Clé ID de mon projet</h3><p>Partage cette clé uniquement avec les collaborateurs autorisés à rejoindre ton espace.</p></div><LockKeyhole size={19} className="muted-icon"/></div>
-          <div className="project-key-value"><code>{projectId || 'Aucun ID attribué'}</code>
-            <button className="button button-primary" disabled={!projectId} onClick={() => { if (!projectId) return; void navigator.clipboard.writeText(projectId).then(() => notify('Clé ID du projet copiée.')).catch(() => notify('Copie impossible. Sélectionne la clé et copie-la manuellement.', 'error')); }}><ClipboardList size={16}/> Copier la clé</button>
+          <div className="project-key-heading">
+            <span className="project-key-icon"><LockKeyhole size={25}/></span>
+            <div className="project-key-title"><h3>Clé ID de mon projet</h3><p>Partage cette clé uniquement avec les collaborateurs autorisés à rejoindre ton espace. Elle leur permet d’envoyer une demande d’accès.</p></div>
+            <span className="project-key-admin"><LockKeyhole size={15}/> Visible uniquement par l’administrateur</span>
           </div>
-          <p className="muted-copy small-note">Cette clé est visible uniquement dans les paramètres du compte administrateur du projet.</p>
+          <label className="project-key-label">CLÉ ID DU PROJET</label>
+          <div className="project-key-value">
+            <span className="project-key-symbol"><ShieldCheck size={19}/></span>
+            <code>{projectId ? (showProjectKey ? projectId : '•'.repeat(Math.min(projectId.length, 24))) : 'Aucun ID attribué'}</code>
+            <button type="button" className="project-key-icon-button" disabled={!projectId} aria-label={showProjectKey ? 'Masquer la clé' : 'Afficher la clé'} title={showProjectKey ? 'Masquer la clé' : 'Afficher la clé'} onClick={() => setShowProjectKey((visible) => !visible)}><Eye size={20}/></button>
+            <button type="button" className="button button-primary project-key-copy" disabled={!projectId} onClick={() => { if (!projectId) return; void navigator.clipboard.writeText(projectId).then(() => notify('Clé ID du projet copiée.')).catch(() => notify('Copie impossible. Sélectionne la clé et copie-la manuellement.', 'error')); }}><ClipboardList size={17}/> Copier</button>
+          </div>
+          <div className="project-key-notice"><span className="project-key-notice-icon"><CircleHelp size={20}/></span><div><strong>Important</strong><p>Cette clé est propre à ton projet. Ne la partage qu’avec des personnes de confiance. L’accès au projet reste soumis à ton approbation.</p></div></div>
         </section>}
         <section className="settings-grid">
         <div className="panel"><div className="panel-heading"><div><h3>État des services</h3><p>Connexion et configuration cloud</p></div><Activity size={19} className="muted-icon"/></div><div className="setting-row"><span className="setting-icon"><ShieldCheck size={18}/></span><div><strong>Firebase</strong><small>{firebaseConfigured ? 'Configuration détectée' : 'Variables VITE_FIREBASE_* absentes'}</small></div><span className={firebaseConfigured ? 'status-pill status-green' : 'status-pill status-amber'}><span className="status-dot"/>{firebaseConfigured ? 'Configuré' : 'À configurer'}</span></div><div className="notice notice-info setting-notice"><LockKeyhole size={18}/><div><strong>Accès sécurisé</strong><p>La connexion nécessite un e-mail vérifié et un compte approuvé.</p></div></div></div>
