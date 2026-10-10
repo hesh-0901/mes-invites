@@ -35,7 +35,7 @@ service cloud.firestore {
         && request.resource.data.id == projectId
         && request.resource.data.ownerUid is string
         && request.resource.data.status == 'active';
-      allow read: if signedIn() && (
+      allow read: if request.auth != null && resource.data.status == 'active' || (signedIn() && (
         isSuperAdmin()
         || (resource.data.ownerUid == request.auth.uid)
         || isProjectAdmin(projectId)
@@ -45,13 +45,13 @@ service cloud.firestore {
         || (hasProfile() && userProfile().role == 'collaborator'
           && userProfile().status == 'pending'
           && userProfile().projectId == projectId)
-      );
+      ));
       allow update: if isSuperAdmin();
       allow delete: if isSuperAdmin();
     }
 
     match /users/{userId} {
-      allow create: if signedIn()
+      allow create: if request.auth != null
         && request.auth.uid == userId
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.super_admin == false
