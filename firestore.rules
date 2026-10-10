@@ -133,12 +133,16 @@ service cloud.firestore {
         || isSuperAdmin()
         || (resource.data.role == 'collaborator'
           && resource.data.status == 'pending'
+          && resource.data.projectId is string
           && isProjectAdmin(resource.data.projectId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'reviewedAt', 'reviewedBy'])
           && request.resource.data.uid == resource.data.uid
           && request.resource.data.role == resource.data.role
           && request.resource.data.projectId == resource.data.projectId
           && request.resource.data.super_admin == false
-          && request.resource.data.status in ['approved', 'rejected'])
+          && request.resource.data.status in ['approved', 'rejected']
+          && request.resource.data.reviewedBy == request.auth.uid)
         || (resource.data.role == 'collaborator'
           && resource.data.status == 'approved'
           && isProjectAdmin(resource.data.projectId)
