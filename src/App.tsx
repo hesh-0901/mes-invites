@@ -772,23 +772,27 @@ export default function App() {
 
   const decideAdminRequest = async (uid: string, status: 'approved' | 'rejected') => {
     if (!firestore || (!isSuperAdmin && currentProfile?.role !== 'admin')) return;
+    let stage = 'lecture de la demande';
     try {
       const requestSnapshot = await getDoc(doc(firestore, 'users', uid));
       if (!requestSnapshot.exists()) throw new Error('Demande introuvable.');
       const request = requestSnapshot.data();
       if (isSuperAdmin && request.role === 'admin' && status === 'approved') {
+        stage = 'création de l’espace';
         const projectRef = doc(collection(firestore, 'projects'));
         await setDoc(projectRef, {
           id: projectRef.id, ownerUid: uid, ownerEmail: request.email ?? '',
           name: `Espace de ${String(request.firstName ?? 'l’administrateur')} ${String(request.lastName ?? '')}`.trim(),
           status: 'active', createdAt: new Date().toISOString(),
         });
-        await updateDoc(doc(firestore, 'users', uid), { status, projectId: projectRef.id, reviewedAt: new Date().toISOString(), reviewedBy: authUser?.uid ?? null });
+        stage = 'mise à jour du compte administrateur';
+        await updateDoc(doc(firestore, 'users', uid), { status, projectId: projectRef.id, reviewedAt: new Date().toISOString(), reviewedBy: auth.currentUser?.uid ?? null });
       } else {
         if (!isSuperAdmin && (request.role !== 'collaborator' || request.projectId !== currentProfile?.projectId)) {
           throw new Error('Cette demande ne dépend pas de votre espace.');
         }
-        await updateDoc(doc(firestore, 'users', uid), { status, reviewedAt: new Date().toISOString(), reviewedBy: authUser?.uid ?? null });
+        stage = 'mise à jour du statut du collaborateur';
+        await updateDoc(doc(firestore, 'users', uid), { status, reviewedAt: new Date().toISOString(), reviewedBy: auth.currentUser?.uid ?? null });
       }
       setAdminRequests((current) => current.filter((entry) => entry.uid !== uid));
       notify(status === 'approved' ? (isSuperAdmin ? 'Compte administrateur approuvé et espace créé.' : 'Collaborateur approuvé.') : 'Demande refusée.', 'success');
@@ -796,7 +800,7 @@ export default function App() {
       const firebaseError = error as { code?: string; message?: string };
       const code = firebaseError.code ?? 'erreur-inconnue';
       console.error('Échec de la décision d’accès :', code, firebaseError.message ?? error);
-      notify(`Décision non enregistrée (${code}). Vérifie les règles Firestore publiées.`, 'error');
+      notify(`Échec pendant : ${stage} (${code}). Vérifie les règles Firestore publiées.`, 'error');
     }
   };
 
