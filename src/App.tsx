@@ -11,7 +11,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { Html5Qrcode } from 'html5-qrcode';
 import { auth, firebaseConfigured, firestore } from './firebase';
 import { createUserWithEmailAndPassword, onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 import { deleteRecord, FIRESTORE_COLLECTIONS, loadCollection, saveCheckinRecord, saveGuestRecord, saveRecord, saveTableRecord } from './firestoreData';
 import type { Checkin, Guest, GuestTable, InvitationKind, Salutation } from './types';
 
@@ -53,6 +53,9 @@ export default function App() {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [accessState, setAccessState] = useState<'checking' | 'approved' | 'pending' | 'rejected' | 'profile-error'>('checking');
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [adminRequests, setAdminRequests] = useState<Record<string, unknown>[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
   useEffect(() => {
     if (!auth) { setAuthReady(true); return; }
     return onAuthStateChanged(auth, async (user) => {
@@ -67,7 +70,7 @@ export default function App() {
       try {
         const profileSnapshot = await getDoc(doc(firestore, 'users', user.uid));
         const profile = profileSnapshot.exists() ? profileSnapshot.data() : null;
-        setAccessState(profile?.super_admin === true || profile?.status === 'approved'
+        setIsSuperAdmin(profile?.super_admin === true);\n        setAccessState(profile?.super_admin === true || profile?.status === 'approved'
           ? 'approved'
           : profile?.status === 'rejected' ? 'rejected' : profile ? 'pending' : 'profile-error');
       } catch {
@@ -699,16 +702,39 @@ export default function App() {
     </>
   );
 
+  const loadAdminRequests = async () => {
+    if (!firestore || !isSuperAdmin) return;
+    setRequestsLoading(true);
+    try {
+      const snapshot = await getDocs(collection(firestore, 'users'));
+      setAdminRequests(snapshot.docs.map((entry) => ({ ...entry.data(), uid: entry.id })).filter((entry) => entry.super_admin !== true && entry.status === 'pending'));
+    } catch {
+      notify('Impossible de charger les demandes. Vérifie les règles Firestore publiées.', 'error');
+    } finally { setRequestsLoading(false); }
+  };
+
+  const decideAdminRequest = async (uid: string, status: 'approved' | 'rejected') => {
+    if (!firestore || !isSuperAdmin) return;
+    try {
+      await updateDoc(doc(firestore, 'users', uid), { status, reviewedAt: new Date().toISOString(), reviewedBy: authUser?.uid ?? null });
+      setAdminRequests((current) => current.filter((entry) => entry.uid !== uid));
+      notify(status === 'approved' ? 'Compte administrateur approuvé.' : 'Demande refusée.', 'success');
+    } catch {
+      notify('La décision n’a pas pu être enregistrée. Vérifie les règles Firestore.', 'error');
+    }
+  };
+
   const renderSettings = () => (
     <>
       <section className="welcome-row"><div><div className="eyebrow">CONFIGURATION</div><h2>Paramètres</h2><p>État des services et informations de préparation.</p></div></section>
+      {isSuperAdmin && <section className="panel"><div className="panel-heading"><div><h3>Demandes administrateur</h3><p>Seul le super administrateur peut approuver ces comptes.</p></div><button className="button button-secondary" onClick={() => void loadAdminRequests()}><Activity size={16}/> Actualiser</button></div>{requestsLoading ? <div className="empty-state">Chargement des demandes…</div> : adminRequests.length === 0 ? <div className="empty-state"><ShieldCheck size={28}/><strong>Aucune demande en attente</strong><span>Les nouvelles inscriptions apparaîtront ici.</span></div> : <div className="table-wrap"><table><thead><tr><th>Administrateur</th><th>E-mail</th><th>WhatsApp</th><th>Inscription</th><th>Décision</th></tr></thead><tbody>{adminRequests.map((request) => <tr key={String(request.uid)}><td><strong>{String(request.firstName ?? '')} {String(request.lastName ?? '')}</strong></td><td>{String(request.email ?? '')}</td><td>{String(request.whatsapp ?? '—')}</td><td>{String(request.createdAt ?? '—').slice(0,10)}</td><td><div className="inline-actions"><button className="button button-primary" onClick={() => void decideAdminRequest(String(request.uid), 'approved')}>Approuver</button><button className="button button-danger-ghost" onClick={() => void decideAdminRequest(String(request.uid), 'rejected')}>Refuser</button></div></td></tr>)}</tbody></table></div>}</section>}
       <section className="settings-grid"><div className="panel"><div className="panel-heading"><div><h3>Services cloud</h3><p>Configuration Firebase du projet</p></div><Activity size={19} className="muted-icon" /></div><div className="setting-row"><span className="setting-icon"><ShieldCheck size={18} /></span><div><strong>Firebase Web SDK</strong><small>{firebaseConfigured ? 'SDK initialisé — données cloud non activées' : 'Variables d’environnement absentes'}</small></div><span className={`status-pill ${firebaseConfigured ? 'status-green' : 'status-amber'}`}><span className="status-dot" />{firebaseConfigured ? 'SDK initialisé' : 'Non connecté'}</span></div><div className="notice notice-info setting-notice"><LockKeyhole size={18} /><div><strong>La configuration n’est pas une autorisation</strong><p>Les règles Firestore et la validation côté serveur devront être définies avant toute donnée réelle.</p></div></div><button className="button button-secondary" onClick={() => notify('Configure les variables VITE_FIREBASE_* dans .env.local.', 'info')}>Voir les variables nécessaires</button></div>
       <div className="panel"><div className="panel-heading"><div><h3>Événement</h3><p>Informations générales</p></div><Heart size={19} className="muted-icon" /></div><div className="event-placeholder"><span className="event-monogram">M<span>&</span>I</span><strong>Mes Invites</strong><p>Les noms des mariés, la date et le lieu pourront être renseignés dans une prochaine étape.</p></div></div>
       <div className="panel"><div className="panel-heading"><div><h3>Mode de fonctionnement</h3><p>État de cette version</p></div><Settings size={19} className="muted-icon" /></div><div className="setting-row"><span className="setting-icon"><Activity size={18} /></span><div><strong>Données de démonstration</strong><small>Les modifications ne sont pas persistées dans le cloud.</small></div><span className="status-pill status-amber"><span className="status-dot" /> Actif</span></div><div className="setting-row"><span className="setting-icon"><FileImage size={18} /></span><div><strong>Template original</strong><small>À fournir pour déterminer les positions exactes.</small></div><span className="status-pill status-neutral"><span className="status-dot" /> À configurer</span></div><button className="button button-secondary" onClick={() => navigate('templates')}><FileImage size={16} /> Ajouter et positionner un template</button></div></section>
     </>
   );
 
-  if (!authReady || (authUser && accessState === 'checking')) return <div className="auth-loading">Chargement sécurisé…</div>;
+  if (authUser && isSuperAdmin && page === 'settings' && adminRequests.length === 0 && !requestsLoading) { /* loaded on demand by button */ }\n  if (!authReady || (authUser && accessState === 'checking')) return <div className="auth-loading">Chargement sécurisé…</div>;
   if (!authUser) return <AuthScreen />;
   if (accessState !== 'approved') return <main className="auth-screen"><section className="auth-card"><div className="auth-brand"><span className="auth-mark"><ShieldCheck size={24}/></span><span>Mes Invites<small>CONTRÔLE DES ACCÈS</small></span></div><div className="auth-intro"><span className="eyebrow">ESPACE SÉCURISÉ</span><h1>{accessState === 'pending' ? 'Demande en attente' : accessState === 'rejected' ? 'Demande refusée' : 'Accès indisponible'}</h1><p>{accessState === 'pending' ? 'Ton adresse e-mail est vérifiée. Un super administrateur doit approuver ton compte avant que tu puisses accéder à ton espace.' : accessState === 'rejected' ? 'La demande d’accès à ce compte a été refusée. Contacte le support si tu penses qu’il s’agit d’une erreur.' : 'Le profil de ce compte ne peut pas être vérifié. Réessaie plus tard ou contacte le support.'}</p></div><button className="button button-secondary auth-submit" onClick={() => auth && void signOut(auth)}>Se déconnecter</button></section></main>;
 
