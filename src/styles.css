@@ -845,3 +845,55 @@ tbody td>strong{font-weight:600;color:#453c41}
 @media (prefers-reduced-motion: reduce) {
   .permission-modal { animation: none; }
 }
+
+
+/* Complete access & accounts settings */
+.access-overview{display:flex;flex-direction:column;gap:22px;margin:4px 0 18px;padding:26px;background:linear-gradient(135deg,#fff 0%,#fdf8fa 100%);border:1px solid #eee3e7;border-radius:20px}
+.access-overview-heading{display:flex;align-items:center;justify-content:space-between;gap:20px}
+.access-overview-heading h3{margin:7px 0 5px;color:#35242b;font-size:23px;font-weight:750;letter-spacing:-.035em}
+.access-overview-heading p{margin:0;color:#887780;font-size:13px;line-height:1.6}
+.access-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
+.access-metric{display:flex;align-items:center;gap:13px;min-width:0;padding:17px;background:#fff;border:1px solid #eee7e9;border-radius:15px}
+.access-metric-icon{display:grid;place-items:center;flex:0 0 42px;width:42px;height:42px;color:#7c2e45;background:#f8edf0;border-radius:13px}
+.access-metric small,.access-metric strong{display:block}
+.access-metric small{margin-bottom:5px;color:#8b7b82;font-size:11px}
+.access-metric strong{color:#392a30;font-size:21px;font-weight:750}
+.access-section{margin-bottom:18px;padding:23px!important;border:1px solid #eee6e9!important;border-radius:18px!important}
+.access-section-heading{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:19px}
+.access-section-heading>div{display:flex;align-items:flex-start;gap:13px;min-width:0}
+.access-step{display:grid;place-items:center;flex:0 0 35px;width:35px;height:35px;color:#7c2e45;background:#f8edf0;border-radius:11px;font-size:12px;font-weight:750}
+.access-section-heading h3{margin:0 0 5px;color:#38282f;font-size:16px;font-weight:700}
+.access-section-heading p{margin:0;color:#8a7b81;font-size:12px;line-height:1.55}
+.access-count{flex-shrink:0;padding:7px 10px;color:#7c2e45;background:#fbf1f4;border:1px solid #f0dfe5;border-radius:999px;font-size:11px;font-weight:650}
+.access-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:145px;padding:24px;text-align:center;color:#9a8790;background:#fdfbfc;border:1px dashed #e8dce1;border-radius:14px}
+.access-empty>strong{color:#4a3940;font-size:13px}
+.access-empty p{max-width:420px;margin:0;color:#92828a;font-size:12px;line-height:1.6}
+.access-request-list,.access-collaborator-list{display:flex;flex-direction:column;gap:10px}
+.access-request-card,.access-collaborator-card{display:flex;align-items:center;gap:14px;min-width:0;padding:15px;background:#fff;border:1px solid #eee7e9;border-radius:15px;transition:border-color .15s ease,box-shadow .15s ease}
+.access-request-card:hover,.access-collaborator-card:hover{border-color:#dfc5ce;box-shadow:0 5px 18px rgba(72,34,47,.045)}
+.access-person-avatar{display:grid;place-items:center;flex:0 0 43px;width:43px;height:43px;color:#fff;background:linear-gradient(145deg,#8a3b52,#64253a);border-radius:14px;font-size:16px;font-weight:700}
+.access-person-info{display:flex;flex:1;flex-direction:column;gap:4px;min-width:0}
+.access-person-info>strong{overflow:hidden;color:#3d2c33;font-size:13px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}
+.access-person-info>span{color:#7c2e45;font-size:11px;font-weight:600}
+.access-person-info>small{overflow:hidden;color:#97878e;font-size:11px;text-overflow:ellipsis;white-space:nowrap}
+.access-request-actions{display:flex;align-items:center;gap:8px}
+.access-request-actions .button,.access-manage-button{min-height:39px;padding:0 12px;border-radius:11px;font-size:11px;white-space:nowrap}
+.access-active-status{display:flex;align-items:center;gap:6px}
+.access-active-status:before{content:"";width:7px;height:7px;background:#39a779;border-radius:50%}
+.access-permission-summary{display:flex;flex-direction:column;gap:3px;min-width:80px;text-align:center}
+.access-permission-summary>strong{color:#7c2e45;font-size:19px;font-weight:750}
+.access-permission-summary>strong span{color:#b3a2a9;font-size:12px;font-weight:500}
+.access-permission-summary>small{color:#93828a;font-size:10px}
+.access-manage-button{display:flex;align-items:center;gap:7px}
+.access-security-note{display:flex;align-items:flex-start;gap:13px;margin:4px 0 20px;padding:17px 19px;color:#7c2e45;background:#fcf5f7;border:1px solid #f0e1e6;border-radius:14px}
+.access-security-note>svg{flex-shrink:0;margin-top:1px}
+.access-security-note strong{display:block;margin-bottom:4px;color:#59303d;font-size:12px}
+.access-security-note p{margin:0;color:#8b737d;font-size:11px;line-height:1.65}
+.permission-modal-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 26px;background:#fdf9fa;border-bottom:1px solid #f0e9eb}
+.permission-modal-toolbar>span{color:#817078;font-size:12px;white-space:nowrap}
+.permission-modal-toolbar>span strong{color:#7c2e45;font-size:15px}
+.permission-modal-toolbar>div{display:flex;gap:7px}
+.permission-modal-toolbar button{padding:8px 10px;color:#7c2e45;background:#fff;border:1px solid #ead9df;border-radius:9px;font-size:11px;font-weight:600;cursor:pointer}
+.permission-modal-toolbar button:hover{background:#f8edf0}
+@media(max-width:760px){.access-overview{padding:19px}.access-overview-heading{align-items:flex-start}.access-overview-heading h3{font-size:20px}.access-metrics{grid-template-columns:1fr}.access-metric{padding:13px}.access-section{padding:16px!important}.access-section-heading{align-items:flex-start}.access-section-heading p{max-width:300px}.access-request-card,.access-collaborator-card{flex-wrap:wrap;gap:11px}.access-person-info{flex-basis:calc(100% - 60px)}.access-request-actions{width:100%;padding-left:54px}.access-request-actions .button{flex:1;justify-content:center}.access-permission-summary{margin-left:54px}.access-manage-button{margin-left:auto}.permission-modal-toolbar{align-items:flex-start;flex-direction:column;padding:12px 16px}.permission-modal-toolbar>div{width:100%}.permission-modal-toolbar button{flex:1}}
+@media(max-width:430px){.access-overview-heading{flex-direction:column}.access-overview-heading>.button{width:100%;justify-content:center}.access-section-heading{flex-direction:column}.access-count{align-self:flex-start}.access-request-actions{padding-left:0}.access-permission-summary{margin-left:0}.access-manage-button{width:100%;justify-content:center}.permission-modal-toolbar>div{flex-direction:column}}
