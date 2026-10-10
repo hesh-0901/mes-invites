@@ -356,3 +356,85 @@ tbody td>strong{font-weight:600;color:#453c41}
 .button-danger-ghost{background:#fff0ef!important;color:#b33e46!important;border:1px solid #f0c8c9!important}
 .button-danger-ghost:hover{background:#ffe3e2!important;border-color:#e9abad!important}
 .delete-confirm-item-name{width:100%;padding:14px 16px!important;border:1px solid #eee0e2;border-radius:12px;background:#fbf7f7;color:#4a2732!important;font-size:15px!important;font-weight:750;overflow-wrap:anywhere}
+
+
+/* Mise en évidence du dialogue de suppression — tables et invités */
+.modal-backdrop:has(.delete-confirm-content){
+  background:rgba(28,12,18,.78);
+  backdrop-filter:blur(6px);
+  padding:16px;
+}
+.modal:has(.delete-confirm-content){
+  width:min(100%,520px);
+  padding:28px;
+  border:1px solid #f0c7ca;
+  border-top:5px solid #b8323d;
+  border-radius:18px;
+  box-shadow:0 28px 100px rgba(24,8,14,.42),0 0 0 1px rgba(255,255,255,.35);
+}
+.modal:has(.delete-confirm-content) .modal-heading{
+  margin-bottom:12px;
+  padding-bottom:16px;
+  border-bottom:1px solid #f3e4e5;
+}
+.modal:has(.delete-confirm-content) .modal-heading h3{
+  color:#a52d39;
+  font-size:24px;
+}
+.modal:has(.delete-confirm-content) .modal-heading p{
+  font-size:12px;
+}
+.delete-confirm-content{gap:15px;padding:8px 0 0}
+.delete-confirm-icon{
+  width:76px;
+  height:76px;
+  border-radius:23px;
+  background:linear-gradient(145deg,#ffe9e5,#ffd4d0);
+  border:1px solid #efb3b5;
+  color:#b42332;
+  box-shadow:0 10px 28px rgba(180,35,50,.18);
+}
+.delete-confirm-icon svg{width:34px;height:34px;stroke-width:2.3}
+.delete-confirm-content h3{font-size:19px;max-width:390px}
+.delete-confirm-item-name{
+  padding:17px 18px!important;
+  background:#fff3f3;
+  border:2px solid #e7a8ad;
+  border-left:5px solid #b8323d;
+  border-radius:12px;
+  color:#8f202d!important;
+  font-size:17px!important;
+  line-height:1.45;
+  box-shadow:0 5px 16px rgba(142,32,45,.08);
+}
+.delete-confirm-content .delete-confirm-warning{
+  padding:13px 14px;
+  background:#fff7ed;
+  border:1px solid #f1c9a9;
+  border-left:4px solid #d97736;
+  color:#8d4429;
+  font-weight:600;
+  text-align:left;
+}
+.delete-confirm-content .modal-actions{margin-top:5px;gap:12px}
+.delete-confirm-content .modal-actions .button{min-height:46px;font-size:12px}
+.delete-confirm-content .button-danger-ghost{
+  background:#b8323d!important;
+  color:#fff!important;
+  border:1px solid #a52632!important;
+  box-shadow:0 5px 13px rgba(184,50,61,.2);
+}
+.delete-confirm-content .button-danger-ghost:hover{
+  background:#98232e!important;
+  border-color:#871c27!important;
+  transform:translateY(-1px);
+}
+@media(max-width:600px){
+  .modal:has(.delete-confirm-content){padding:22px 18px;border-radius:15px}
+  .modal:has(.delete-confirm-content) .modal-heading h3{font-size:21px}
+  .delete-confirm-icon{width:66px;height:66px}
+  .delete-confirm-content h3{font-size:17px}
+  .delete-confirm-item-name{font-size:15px!important;padding:14px!important}
+  .delete-confirm-content .modal-actions{flex-direction:column-reverse}
+  .delete-confirm-content .modal-actions .button{width:100%;min-height:45px}
+}
