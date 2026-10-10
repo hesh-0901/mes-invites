@@ -75,6 +75,9 @@ export default function App() {
   const [templateQrSize, setTemplateQrSize] = useState(() => Number(window.localStorage.getItem('mes-invites-template-qr-size') ?? 14));
   const [templateNameSize, setTemplateNameSize] = useState(() => Number(window.localStorage.getItem('mes-invites-template-name-size') ?? 3));
   const [templateNameWidth, setTemplateNameWidth] = useState(() => Number(window.localStorage.getItem('mes-invites-template-name-width') ?? 60));
+  const [templateNameColor, setTemplateNameColor] = useState(() => window.localStorage.getItem('mes-invites-template-name-color') ?? '#762d40');
+  const [templateNameFont, setTemplateNameFont] = useState(() => window.localStorage.getItem('mes-invites-template-name-font') ?? 'Georgia');
+  const [templateNameEffect, setTemplateNameEffect] = useState(() => window.localStorage.getItem('mes-invites-template-name-effect') ?? 'shadow');
   const [templateImageDimensions, setTemplateImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const [templateSampleName, setTemplateSampleName] = useState('Nom de l’invité');
   const [templateLocked, setTemplateLocked] = useState(() => window.localStorage.getItem('mes-invites-template-locked') === 'true');
