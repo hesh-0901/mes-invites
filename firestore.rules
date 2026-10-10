@@ -11,7 +11,8 @@ service cloud.firestore {
     }
 
     function hasProfile() {
-      return request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
     function isSuperAdmin() {
@@ -30,24 +31,61 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/projects/$(projectId)).data.status == 'active';
     }
 
+    function isApprovedProjectMember(projectId) {
+      return hasProfile()
+        && userProfile().status == 'approved'
+        && userProfile().projectId == projectId
+        && (
+          (userProfile().role == 'collaborator')
+          || (signedIn() && userProfile().role == 'admin')
+        );
+    }
+
+    function collaboratorHasMenu(menuId) {
+      return userProfile().role == 'collaborator'
+        && (
+          (userProfile().permissions is list && userProfile().permissions.hasAny([menuId]))
+          || (!(userProfile().permissions is list)
+            && menuId in ['dashboard', 'tables', 'guests', 'invitations', 'scanner', 'history'])
+        );
+    }
+
+    function canAccessProjectCollection(projectId, collectionName) {
+      return isSuperAdmin()
+        || isProjectAdmin(projectId)
+        || (
+          isApprovedProjectMember(projectId)
+          && (
+            (collectionName == 'tables' && collaboratorHasMenu('tables'))
+            || (collectionName == 'guests'
+              && (collaboratorHasMenu('guests') || collaboratorHasMenu('invitations')))
+            || (collectionName == 'checkins'
+              && (collaboratorHasMenu('scanner') || collaboratorHasMenu('history')))
+            || (collectionName == 'eventSettings' && collaboratorHasMenu('settings'))
+            || (collectionName == 'templates' && collaboratorHasMenu('templates'))
+          )
+        );
+    }
+
     match /projects/{projectId} {
       allow create: if isSuperAdmin()
         && request.resource.data.id == projectId
         && request.resource.data.ownerUid is string
         && request.resource.data.status == 'active';
-      allow read: if request.auth != null && resource.data.status == 'active' || (signedIn() && (
-        isSuperAdmin()
-        || (resource.data.ownerUid == request.auth.uid)
-        || isProjectAdmin(projectId)
-        || (hasProfile() && userProfile().role == 'collaborator'
-          && userProfile().status == 'approved'
-          && userProfile().projectId == projectId)
-        || (hasProfile() && userProfile().role == 'collaborator'
-          && userProfile().status == 'pending'
-          && userProfile().projectId == projectId)
-      ));
-      allow update: if isSuperAdmin();
-      allow delete: if isSuperAdmin();
+
+      // Active project metadata must be readable to allow collaborators to
+      // validate a project code before their profile is created.
+      allow read: if (request.auth != null && resource.data.status == 'active')
+        || (signedIn() && (
+          isSuperAdmin()
+          || resource.data.ownerUid == request.auth.uid
+          || isProjectAdmin(projectId)
+          || (hasProfile()
+            && userProfile().role == 'collaborator'
+            && userProfile().projectId == projectId)
+        ));
+
+      allow update, delete: if isSuperAdmin();
     }
 
     match /users/{userId} {
@@ -63,11 +101,11 @@ service cloud.firestore {
             && activeProject(request.resource.data.projectId))
         );
 
-      allow read: if request.auth != null && request.auth.uid == userId || (signedIn() && (
-        request.auth.uid == userId
-        || isSuperAdmin()
-        || (resource.data.projectId is string && isProjectAdmin(resource.data.projectId))
-      ));
+      allow read: if (request.auth != null && request.auth.uid == userId)
+        || (signedIn() && (
+          isSuperAdmin()
+          || (resource.data.projectId is string && isProjectAdmin(resource.data.projectId))
+        ));
 
       allow update: if signedIn() && (
         (request.auth.uid == userId
@@ -97,19 +135,12 @@ service cloud.firestore {
             'scanner', 'history', 'templates', 'settings'
           ]))
       );
+
       allow delete: if isSuperAdmin();
     }
 
-    function isApprovedProjectMember(projectId) {
-      return hasProfile()
-        && userProfile().status == 'approved'
-        && userProfile().projectId == projectId
-        && (userProfile().role == 'collaborator' || (signedIn() && userProfile().role == 'admin'));
-    }
-
     match /projects/{projectId}/{collectionName}/{documentId} {
-      allow read: if request.auth != null && (isSuperAdmin() || isApprovedProjectMember(projectId));
-      allow create, update, delete: if request.auth != null && (isSuperAdmin() || isApprovedProjectMember(projectId));
+      allow read, create, update, delete: if canAccessProjectCollection(projectId, collectionName);
     }
 
     // Legacy unscoped collections remain blocked until project-scoped migration.
