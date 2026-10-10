@@ -910,7 +910,7 @@ function AuthScreen() {
     try {
       if (mode === 'collaborator') {
         const normalizedProjectId = projectId.trim();
-        const cleanName = firstName.trim().replace(/\\s+/g, ' ');
+        const cleanName = firstName.trim().replace(/\s+/g, ' ');
         const usernameEmail = collaboratorLoginEmail(cleanName);
         operation = 'création du compte collaborateur';
         const credential = await createUserWithEmailAndPassword(auth, usernameEmail, password);
@@ -931,7 +931,7 @@ function AuthScreen() {
         await signOut(auth);
         setMessage('Compte créé. Ta demande d’accès est envoyée ; connecte-toi avec ton nom et ton mot de passe après validation.');
       } else if (mode === 'collaborator-login') {
-        const cleanName = firstName.trim().replace(/\\s+/g, ' ');
+        const cleanName = firstName.trim().replace(/\s+/g, ' ');
         operation = 'connexion du collaborateur';
         await signInWithEmailAndPassword(auth, collaboratorLoginEmail(cleanName), password);
       } else if (mode === 'register') {
@@ -1001,7 +1001,7 @@ function AuthScreen() {
 }
 
 function collaboratorLoginEmail(name: string) {
-  const normalized = name.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const normalized = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   if (normalized.length < 3) throw new Error('Le nom du collaborateur doit contenir au moins 3 caractères distinctifs.');
   return `${normalized}@collaborateur.mesinvites.app`;
 }
