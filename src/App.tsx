@@ -11,7 +11,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { Html5Qrcode } from 'html5-qrcode';
 import { auth, firebaseConfigured, firestore } from './firebase';
 import { createUserWithEmailAndPassword, onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc } from 'firebase/firestore';
 import { deleteRecord, FIRESTORE_COLLECTIONS, loadCollection, saveCheckinRecord, saveGuestRecord, saveRecord, saveTableRecord } from './firestoreData';
 import type { Checkin, Guest, GuestTable, InvitationKind, Salutation } from './types';
 
@@ -711,11 +711,12 @@ export default function App() {
     if (!firestore || (!isSuperAdmin && currentProfile?.role !== 'admin')) return;
     setRequestsLoading(true);
     try {
-      const snapshot = await getDocs(collection(firestore, 'users'));
+      const usersRef = collection(firestore, 'users');
+      const snapshot = isSuperAdmin
+        ? await getDocs(query(usersRef, where('role', '==', 'admin'), where('status', '==', 'pending')))
+        : await getDocs(query(usersRef, where('role', '==', 'collaborator'), where('projectId', '==', currentProfile?.projectId), where('status', '==', 'pending')));
       const requests: Record<string, unknown>[] = snapshot.docs.map((entry) => ({ ...entry.data(), uid: entry.id }));
-      setAdminRequests(requests.filter((entry) => isSuperAdmin
-        ? entry.super_admin !== true && entry.role === 'admin' && entry.status === 'pending'
-        : entry.role === 'collaborator' && entry.projectId === currentProfile?.projectId && entry.status === 'pending'));
+      setAdminRequests(requests.filter((entry) => entry.super_admin !== true));
     } catch {
       notify('Impossible de charger les demandes. Vérifie les règles Firestore publiées.', 'error');
     } finally { setRequestsLoading(false); }
