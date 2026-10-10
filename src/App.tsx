@@ -4,7 +4,7 @@ import {
   ChevronLeft, ChevronRight, CircleHelp, ClipboardList, Download, Eye,
   FileImage, Heart, LayoutDashboard, MoreHorizontal, Plus, QrCode,
   ScanLine, Search, Settings, ShieldCheck, Sparkles, Table2, Ticket, Users, X,
-  AlertTriangle, Camera, ExternalLink, LockKeyhole, Trash2, Pencil,
+  AlertTriangle, Camera, LockKeyhole, Trash2, Pencil,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Html5Qrcode } from 'html5-qrcode';
