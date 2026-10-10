@@ -839,6 +839,8 @@ function AuthScreen() {
           role: 'collaborator', status: 'pending', super_admin: false, projectId: normalizedProjectId,
           createdAt: new Date().toISOString(),
         });
+        await signOut(auth);
+        await signInAnonymously(auth);
         setMessage('Demande envoyée. Attends que l’administrateur approuve ton accès.');
       } else if (mode === 'register') {
         const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
