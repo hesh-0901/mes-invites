@@ -77,6 +77,8 @@ export default function App() {
   const [templateImageDimensions, setTemplateImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const [templateSampleName, setTemplateSampleName] = useState('Nom de l’invité');
   const [templateLocked, setTemplateLocked] = useState(() => window.localStorage.getItem('mes-invites-template-locked') === 'true');
+  const [draggingTemplateElement, setDraggingTemplateElement] = useState<'name' | 'qr' | null>(null);
+  const templatePreviewRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!templateImage) { setTemplateImageDimensions(null); return; }
@@ -403,6 +405,36 @@ export default function App() {
     </>
   );
 
+  const moveTemplateElement = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingTemplateElement || !templatePreviewRef.current) return;
+    const rect = templatePreviewRef.current.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const x = Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100));
+    if (draggingTemplateElement === 'name') { setTemplateNameX(x); setTemplateNameY(y); }
+    else { setTemplateQrX(x); setTemplateQrY(y); }
+  };
+
+  const downloadOriginalTemplate = async () => {
+    if (!templateImage) return;
+    try {
+      const response = await fetch(templateImage);
+      if (!response.ok) throw new Error('Téléchargement impossible.');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `template-original${blob.type === 'image/png' ? '.png' : blob.type === 'image/webp' ? '.webp' : '.jpg'}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      notify('Template original téléchargé sans ajout ni modification.');
+    } catch {
+      notify('Le téléchargement direct a échoué. Vérifie que le template Cloudinary est accessible.', 'error');
+    }
+  };
+
   const saveTemplateSettings = () => {
     try {
       window.localStorage.setItem('mes-invites-template-name-x', String(templateNameX));
@@ -448,7 +480,7 @@ export default function App() {
         <section className="template-locked-workspace">
           <div className="template-locked-topline"><span><LockKeyhole size={14} /> MODÈLE CONFIGURÉ</span><button className="template-edit-discreet" onClick={() => { setTemplateLocked(false); window.localStorage.setItem('mes-invites-template-locked', 'false'); }}><Pencil size={14} /> Modifier</button></div>
           <div className="template-locked-canvas" style={{ aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4' }}>
-            <div className="template-live-preview" style={{ backgroundImage: `url("${templateImage}")`, aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4' }}>
+            <div className="template-live-preview" style={{ backgroundImage: `url("${templateImage}")`, aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4', backgroundSize: '100% 100%' }}>
               <div className="template-preview-name" style={{ left: `${templateNameX}%`, top: `${templateNameY}%`, fontSize: `${templateNameSize}cqw`, maxWidth: `${templateNameWidth}%` }}>{templateSampleName || 'Nom de l’invité'}</div>
               <div className="template-preview-qr" style={{ left: `${templateQrX}%`, top: `${templateQrY}%`, width: `${templateQrSize}%` }}><QRCodeSVG value="APERÇU-MODÈLE-MES-INVITES" size={128} level="H" includeMargin /></div>
             </div>
@@ -467,8 +499,8 @@ export default function App() {
               <div className="modal-actions"><button className="button button-secondary" onClick={() => { setTemplateNameX(50); setTemplateNameY(55); setTemplateQrX(78); setTemplateQrY(82); setTemplateQrSize(14); setTemplateNameSize(3); setTemplateNameWidth(60); }}>Réinitialiser</button><button className="button button-primary" onClick={saveTemplateSettings}><Check size={16} /> Enregistrer et verrouiller</button></div>
               <p className="muted-copy small-note"><LockKeyhole size={14} /> Après l’enregistrement, les paramètres seront masqués. Utilise « Modifier » pour les afficher de nouveau.</p>
             </div>
-            <div className="panel template-preview-panel"><div className="panel-heading"><div><h3>Aperçu en direct</h3><p>Exemple de placement du nom et du QR code.</p></div><Eye size={18} className="muted-icon" /></div>
-              {templateImage ? <div className="template-live-preview" style={{ backgroundImage: `url("${templateImage}")`, aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4' }}><div className="template-preview-name" style={{ left: `${templateNameX}%`, top: `${templateNameY}%`, fontSize: `${templateNameSize}cqw`, maxWidth: `${templateNameWidth}%` }}>{templateSampleName || 'Nom de l’invité'}</div><div className="template-preview-qr" style={{ left: `${templateQrX}%`, top: `${templateQrY}%`, width: `${templateQrSize}%` }}><QRCodeSVG value="PREVIEW-QR-MES-INVITES" size={128} level="H" includeMargin /></div></div> : <div className="template-preview-empty"><FileImage size={34} /><strong>Importe ton modèle pour commencer</strong><span>Formats acceptés : PNG, JPG et WebP. L’aperçu conserve le ratio de l’image.</span></div>}
+            <div className="panel template-preview-panel"><div className="panel-heading"><div><h3>Aperçu en direct</h3><p>Exemple de placement du nom et du QR code.</p></div><Eye size={18} className="muted-icon" /></div>{templateImage && <button className="button button-secondary template-download-original" onClick={() => void downloadOriginalTemplate()}><Download size={15} /> Télécharger le template original</button>}
+              {templateImage ? <div ref={templatePreviewRef} className="template-live-preview" onPointerMove={moveTemplateElement} onPointerUp={() => setDraggingTemplateElement(null)} onPointerCancel={() => setDraggingTemplateElement(null)} style={{ backgroundImage: `url("${templateImage}")`, aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4', backgroundSize: '100% 100%' }}><div className={`template-preview-name template-draggable ${draggingTemplateElement === 'name' ? 'template-dragging' : ''}`} onPointerDown={(event) => { event.preventDefault(); setDraggingTemplateElement('name'); event.currentTarget.setPointerCapture(event.pointerId); }} style={{ left: `${templateNameX}%`, top: `${templateNameY}%`, fontSize: `${templateNameSize}cqw`, maxWidth: `${templateNameWidth}%` }}>{templateSampleName || 'Nom de l’invité'}<span className="template-drag-hint">Déplacer</span></div><div className={`template-preview-qr template-draggable ${draggingTemplateElement === 'qr' ? 'template-dragging' : ''}`} onPointerDown={(event) => { event.preventDefault(); setDraggingTemplateElement('qr'); event.currentTarget.setPointerCapture(event.pointerId); }} style={{ left: `${templateQrX}%`, top: `${templateQrY}%`, width: `${templateQrSize}%` }}><QRCodeSVG value="PREVIEW-QR-MES-INVITES" size={128} level="H" includeMargin /><span className="template-drag-hint">Déplacer</span></div></div> : <div className="template-preview-empty"><FileImage size={34} /><strong>Importe ton modèle pour commencer</strong><span>Formats acceptés : PNG, JPG et WebP. L’aperçu conserve le ratio de l’image.</span></div>}
               {templateImage && <button className="button button-danger-ghost" onClick={() => { window.localStorage.removeItem('mes-invites-template-image'); window.localStorage.setItem('mes-invites-template-locked', 'false'); setTemplateLocked(false); setTemplateImage(''); notify('Template retiré de cet appareil.', 'info'); }}><Trash2 size={15} /> Retirer ce template</button>}
             </div>
           </section>
