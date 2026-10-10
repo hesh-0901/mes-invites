@@ -881,8 +881,10 @@ function AuthScreen() {
     if (mode === 'register' && password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); return; }
     if (mode === 'collaborator' && !projectId.trim()) { setError('Saisis le code de ton espace.'); return; }
     setBusy(true);
+    let operation = 'initialisation';
     try {
       if (mode === 'collaborator') {
+        operation = 'lecture du projet';
         const normalizedProjectId = projectId.trim();
         const cleanName = firstName.trim();
         if (!cleanName) { setError('Saisis ton nom.'); return; }
@@ -891,8 +893,10 @@ function AuthScreen() {
           setError('Code d’espace introuvable ou inactif. Vérifie le code fourni par l’administrateur.');
           return;
         }
+        operation = 'authentification anonyme';
         const credential = await signInAnonymously(auth);
         await updateProfile(credential.user, { displayName: cleanName });
+        operation = 'création du profil collaborateur';
         await setDoc(doc(firestore, 'users', credential.user.uid), {
           uid: credential.user.uid, firstName: cleanName, lastName: '', email: '', whatsapp: '',
           role: 'collaborator', status: 'pending', super_admin: false, projectId: normalizedProjectId,
@@ -936,7 +940,10 @@ function AuthScreen() {
         'permission-denied': 'Firestore a refusé l’opération. Vérifie les règles et les champs envoyés.',
         'firestore/permission-denied': 'Firestore a refusé l’opération. Vérifie les règles et les champs envoyés.',
       };
-      setError(messages[code] ?? (e instanceof Error ? e.message : 'Une erreur est survenue.'));
+      const detail = messages[code] ?? (e instanceof Error ? e.message : 'Une erreur est survenue.');
+      setError(code === 'permission-denied' || code === 'firestore/permission-denied'
+        ? `Accès Firestore refusé pendant : ${operation}. Vérifie que les règles corrigées sont bien publiées dans Firebase.`
+        : detail);
     } finally { setBusy(false); }
   };
   if (mode === 'landing') return <main className="landing-page">
