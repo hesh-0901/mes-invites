@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  Activity, ArrowDownRight, ArrowUpRight, Bell, Check, CheckCircle2, ChevronDown,
-  ChevronLeft, ChevronRight, CircleHelp, ClipboardList, Clock3, Download, Eye,
-  FileImage, Filter, Heart, LayoutDashboard, Menu, MoreHorizontal, Plus, QrCode,
+  Activity, ArrowDownRight, Bell, Check, CheckCircle2, ChevronDown,
+  ChevronLeft, ChevronRight, CircleHelp, ClipboardList, Download, Eye,
+  FileImage, Heart, LayoutDashboard, MoreHorizontal, Plus, QrCode,
   ScanLine, Search, Settings, ShieldCheck, Sparkles, Table2, Ticket, Users, X,
-  AlertTriangle, Camera, RefreshCw, ExternalLink, LockKeyhole, Trash2, Pencil,
+  AlertTriangle, Camera, ExternalLink, LockKeyhole, Trash2, Pencil,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -68,9 +68,7 @@ export default function App() {
   const [scanResult, setScanResult] = useState<{ state: 'valid' | 'used' | 'invalid'; guest?: Guest; message: string } | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const guestsRef = useRef(guests);
-  const checkinsRef = useRef(checkins);
   useEffect(() => { guestsRef.current = guests; }, [guests]);
-  useEffect(() => { checkinsRef.current = checkins; }, [checkins]);
   useEffect(() => {
     if (!toast) return;
     const timeout = window.setTimeout(() => setToast(null), 3600);
@@ -375,7 +373,7 @@ function StatCard({ label, value, note, icon: Icon, trend }: { label: string; va
   return <article className="stat-card"><div className="stat-card-top"><span>{label}</span><span className="stat-icon"><Icon size={18} strokeWidth={1.8} /></span></div><div className="stat-value">{value.toLocaleString('fr-FR')}</div><div className="stat-bottom">{note && <span>{note}</span>}{trend && <small>{trend}</small>}</div></article>;
 }
 
-function Modal({ title, description, onClose, children, wide = false }: { title: string; description?: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+function Modal({ title, description, onClose, children, wide = false }: { title: string; description?: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
