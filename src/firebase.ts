@@ -1,4 +1,3 @@
-```typescript
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
@@ -24,4 +23,3 @@ export const storage = getStorage(app);
 
 export const firebaseConfigured = true;
 export const firebaseApp = app;
-```
