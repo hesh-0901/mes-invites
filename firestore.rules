@@ -2,46 +2,48 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Profil personnel : un utilisateur ne peut accéder qu'à son propre document.
-    // La création est autorisée avant la vérification de l'e-mail, car le profil
-    // est enregistré pendant le processus d'inscription.
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isSuperAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.super_admin == true;
+    }
+
     match /users/{userId} {
-      allow create: if request.auth != null
+      allow create: if signedIn()
         && request.auth.uid == userId
-        && request.resource.data.uid == request.auth.uid;
-      allow read: if request.auth != null
-        && request.auth.uid == userId
-        && resource.data.uid == request.auth.uid;
-      allow update: if request.auth != null
-        && request.auth.uid == userId
-        && resource.data.uid == request.auth.uid
-        && request.resource.data.uid == request.auth.uid;
-      allow delete: if false;
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.super_admin == false
+        && request.resource.data.role == 'admin'
+        && request.resource.data.status == 'pending'
+        && request.resource.data.projectId == null;
+
+      allow read: if signedIn() && (request.auth.uid == userId || isSuperAdmin());
+
+      // A user may update personal fields, but cannot promote their own role,
+      // approve their account, assign a project, or grant super-admin rights.
+      allow update: if signedIn() && (
+        (request.auth.uid == userId
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.super_admin == resource.data.super_admin
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.status == resource.data.status
+          && request.resource.data.projectId == resource.data.projectId)
+        || isSuperAdmin()
+      );
+      allow delete: if isSuperAdmin();
     }
 
-    // Données partagées de l'événement : accès réservé aux comptes connectés
-    // dont l'adresse e-mail a été vérifiée.
-    function isVerifiedUser() {
-      return request.auth != null
-        && request.auth.token.email_verified == true;
-    }
+    // Legacy unscoped collections remain blocked until project-scoped migration
+    // is deployed. This prevents accidental cross-project data exposure.
+    match /tables/{documentId} { allow read, write: if false; }
+    match /guests/{documentId} { allow read, write: if false; }
+    match /checkins/{documentId} { allow read, write: if false; }
+    match /eventSettings/{documentId} { allow read, write: if false; }
 
-    match /tables/{documentId} {
-      allow read, create, update, delete: if isVerifiedUser();
-    }
-    match /guests/{documentId} {
-      allow read, create, update, delete: if isVerifiedUser();
-    }
-    match /checkins/{documentId} {
-      allow read, create, update, delete: if isVerifiedUser();
-    }
-    match /eventSettings/{documentId} {
-      allow read, create, update, delete: if isVerifiedUser();
-    }
-
-    // Refus par défaut pour toute autre collection.
-    match /{document=**} {
-      allow read, write: if false;
-    }
+    match /{document=**} { allow read, write: if false; }
   }
 }
