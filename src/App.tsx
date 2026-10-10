@@ -10,7 +10,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Html5Qrcode } from 'html5-qrcode';
 import { auth, firebaseConfigured, firestore } from './firebase';
-import { createUserWithEmailAndPassword, onAuthStateChanged, sendEmailVerification, signInAnonymously, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth';
+import { createUserWithEmailAndPassword, deleteUser, onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc } from 'firebase/firestore';
 import { deleteRecord, FIRESTORE_COLLECTIONS, loadCollection, saveCheckinRecord, saveGuestRecord, saveRecord, saveTableRecord } from './firestoreData';
 import type { Checkin, Guest, GuestTable, InvitationKind, Salutation } from './types';
@@ -64,19 +64,17 @@ export default function App() {
   useEffect(() => {
     if (!auth) { setAuthReady(true); return; }
     return onAuthStateChanged(auth, async (user) => {
-      if (!user || (!user.isAnonymous && !user.emailVerified) || !firestore) {
-        setAuthUser(null);
-        setCurrentProfile(null);
-        setIsSuperAdmin(false);
-        setAccessState('checking');
-        setAuthReady(true);
-        return;
+      if (!user || !firestore) {
+        setAuthUser(null); setCurrentProfile(null); setIsSuperAdmin(false); setAccessState('checking'); setAuthReady(true); return;
       }
-      setAuthUser(user);
-      setAccessState('checking');
+      setAuthUser(user); setAccessState('checking');
       try {
         const profileSnapshot = await getDoc(doc(firestore, 'users', user.uid));
         const profile = profileSnapshot.exists() ? profileSnapshot.data() : null;
+        if (!user.isAnonymous && !user.emailVerified && profile?.role !== 'collaborator') {
+          if (user.email?.endsWith('@collaborateur.mesinvites.app') && !profile) { setAuthReady(true); return; }
+          await signOut(auth); setAuthUser(null); setCurrentProfile(null); setIsSuperAdmin(false); setAccessState('checking'); setAuthReady(true); return;
+        }
         // No profile means this anonymous session has not completed a join request.
         // Return to the join form; its submit handler can reuse auth.currentUser.
         if (!profile && user.isAnonymous) {
@@ -888,7 +886,7 @@ export default function App() {
 
 
 function AuthScreen() {
-  const [mode, setMode] = useState<'landing' | 'register' | 'login' | 'collaborator'>('landing');
+  const [mode, setMode] = useState<'landing' | 'choose-role' | 'register' | 'login' | 'collaborator' | 'collaborator-login'>('landing');
   const [projectId, setProjectId] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -903,37 +901,39 @@ function AuthScreen() {
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setError(''); setMessage('');
     if (!auth || !firestore) { setError('Firebase n’est pas configuré.'); return; }
+    if ((mode === 'register' || mode === 'collaborator') && password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); return; }
     if (mode === 'register' && password !== confirmPassword) { setError('Les deux mots de passe ne correspondent pas.'); return; }
-    if (mode === 'register' && password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); return; }
     if (mode === 'collaborator' && !projectId.trim()) { setError('Saisis le code de ton espace.'); return; }
+    if ((mode === 'collaborator' || mode === 'collaborator-login') && !firstName.trim()) { setError('Saisis ton nom de collaborateur.'); return; }
     setBusy(true);
     let operation = 'initialisation';
     try {
       if (mode === 'collaborator') {
         const normalizedProjectId = projectId.trim();
-        const cleanName = firstName.trim();
-        if (!cleanName) { setError('Saisis ton nom.'); return; }
-        // Firestore rules require authentication to read project metadata.
-        operation = 'authentification anonyme';
-        const credential = auth.currentUser?.isAnonymous
-          ? { user: auth.currentUser }
-          : await signInAnonymously(auth);
+        const cleanName = firstName.trim().replace(/\\s+/g, ' ');
+        const usernameEmail = collaboratorLoginEmail(cleanName);
+        operation = 'création du compte collaborateur';
+        const credential = await createUserWithEmailAndPassword(auth, usernameEmail, password);
+        await updateProfile(credential.user, { displayName: cleanName });
         operation = 'lecture du projet';
         const projectSnapshot = await getDoc(doc(firestore, 'projects', normalizedProjectId));
         if (!projectSnapshot.exists() || projectSnapshot.data().status !== 'active') {
-          setError('Code d’espace introuvable ou inactif. Vérifie le code fourni par l’administrateur.');
+          await deleteUser(credential.user);
+          setError('Code d’espace introuvable ou inactif. Vérifie le code fourni par le responsable.');
           return;
         }
-        await updateProfile(credential.user, { displayName: cleanName });
         operation = 'création du profil collaborateur';
         await setDoc(doc(firestore, 'users', credential.user.uid), {
-          uid: credential.user.uid, firstName: cleanName, lastName: '', email: '', whatsapp: '',
+          uid: credential.user.uid, firstName: cleanName, lastName: '', email: usernameEmail, whatsapp: '',
           role: 'collaborator', status: 'pending', super_admin: false, projectId: normalizedProjectId,
           createdAt: new Date().toISOString(),
         });
-        // Keep this anonymous session: the profile is keyed by this UID.
-        // Signing out and signing in again would create a different UID.
-        setMessage('Demande envoyée. Attends que l’administrateur approuve ton accès.');
+        await signOut(auth);
+        setMessage('Compte créé. Ta demande d’accès est envoyée ; connecte-toi avec ton nom et ton mot de passe après validation.');
+      } else if (mode === 'collaborator-login') {
+        const cleanName = firstName.trim().replace(/\\s+/g, ' ');
+        operation = 'connexion du collaborateur';
+        await signInWithEmailAndPassword(auth, collaboratorLoginEmail(cleanName), password);
       } else if (mode === 'register') {
         const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
         const displayName = `${firstName.trim()} ${lastName.trim()}`.trim();
@@ -975,28 +975,35 @@ function AuthScreen() {
         : detail);
     } finally { setBusy(false); }
   };
+  if (mode === 'choose-role') return <main className="auth-screen"><section className="auth-card"><div className="auth-brand"><span className="auth-mark"><Heart size={24}/></span><span>Mes Invites<small>Gestion élégante de vos invitations</small></span></div><div className="auth-intro"><span className="eyebrow">ACCÈS SÉCURISÉ</span><h1>Qui êtes-vous ?</h1><p>Choisissez votre profil avant de vous connecter ou de créer un compte.</p></div><div className="form-stack"><button className="button button-primary auth-submit" onClick={() => { setMode('register'); setError(''); setMessage(''); }}>Responsable de l’espace — créer un compte</button><button className="button button-secondary auth-submit" onClick={() => { setMode('login'); setError(''); setMessage(''); }}>Responsable de l’espace — se connecter</button><button className="button button-primary auth-submit" onClick={() => { setMode('choose-role'); setError(''); setMessage(''); }}>Collaborateur — créer un compte</button><button className="button button-secondary auth-submit" onClick={() => { setMode('collaborator-login'); setError(''); setMessage(''); }}>Collaborateur — se connecter</button></div><p className="auth-switch"><button type="button" onClick={() => setMode('landing')}>Retour à l’accueil</button></p></section></main>;
   if (mode === 'landing') return <main className="landing-page">
-    <header className="landing-nav"><button className="landing-brand" onClick={() => setMode('landing')}><span className="landing-brand-mark"><Heart size={22}/></span><span>mes invites<small>VOS MOMENTS, VOS INVITATIONS</small></span></button><div className="landing-nav-actions"><button className="landing-login-link" onClick={() => setMode('login')}>Se connecter</button><button className="button button-primary landing-nav-cta" onClick={() => setMode('register')}>Créer un espace <ArrowDownRight size={16}/></button></div></header>
-    <section className="landing-hero"><div className="landing-hero-copy"><span className="landing-eyebrow"><span/> L’ART DE RECEVOIR, SIMPLEMENT</span><h1>Vos invitations méritent une expérience <em>inoubliable.</em></h1><p>Créez de belles invitations personnalisées, organisez vos invités et accueillez chacun en toute sérénité. Tout votre événement, dans un seul espace.</p><div className="landing-hero-actions"><button className="button button-primary" onClick={() => setMode('register')}>Créer mon espace <ChevronRight size={17}/></button><button className="landing-secondary-action" onClick={() => setMode('login')}>J’ai déjà un compte</button><button className="landing-secondary-action" onClick={() => { setMode('collaborator'); setError(''); setMessage(''); }}>Rejoindre un espace</button></div><div className="landing-trust"><span><ShieldCheck size={16}/> Espace privé</span><span><CheckCircle2 size={16}/> Gestion simplifiée</span></div></div>
+    <header className="landing-nav"><button className="landing-brand" onClick={() => setMode('landing')}><span className="landing-brand-mark"><Heart size={22}/></span><span>mes invites<small>VOS MOMENTS, VOS INVITATIONS</small></span></button><div className="landing-nav-actions"><button className="landing-login-link" onClick={() => setMode('choose-role')}>Se connecter</button><button className="button button-primary landing-nav-cta" onClick={() => setMode('choose-role')}>Créer un espace <ArrowDownRight size={16}/></button></div></header>
+    <section className="landing-hero"><div className="landing-hero-copy"><span className="landing-eyebrow"><span/> L’ART DE RECEVOIR, SIMPLEMENT</span><h1>Vos invitations méritent une expérience <em>inoubliable.</em></h1><p>Créez de belles invitations personnalisées, organisez vos invités et accueillez chacun en toute sérénité. Tout votre événement, dans un seul espace.</p><div className="landing-hero-actions"><button className="button button-primary" onClick={() => setMode('choose-role')}>Créer mon espace <ChevronRight size={17}/></button><button className="landing-secondary-action" onClick={() => setMode('choose-role')}>J’ai déjà un compte</button><button className="landing-secondary-action" onClick={() => { setMode('choose-role'); setError(''); setMessage(''); }}>Rejoindre un espace</button></div><div className="landing-trust"><span><ShieldCheck size={16}/> Espace privé</span><span><CheckCircle2 size={16}/> Gestion simplifiée</span></div></div>
       <div className="landing-visual" aria-label="Aperçu d’une invitation élégante"><div className="landing-orbit landing-orbit-one"/><div className="landing-orbit landing-orbit-two"/><div className="landing-invitation-card"><span className="landing-card-kicker">VOUS ÊTES CORDIALEMENT INVITÉ(E)</span><span className="landing-card-flourish"><Heart size={20}/></span><span className="landing-card-script">Une journée</span><strong>à célébrer</strong><span className="landing-card-line"/><span className="landing-card-date">AMOUR · JOIE · PARTAGE</span><span className="landing-card-monogram">M <i>&</i> I</span></div><div className="landing-float landing-float-qr"><QrCode size={21}/><span><b>QR code unique</b><small>Entrée simplifiée</small></span></div><div className="landing-float landing-float-guests"><Users size={20}/><span><b>Vos invités</b><small>Tout est organisé</small></span></div><span className="landing-spark landing-spark-a">✳</span><span className="landing-spark landing-spark-b">✦</span></div>
     </section>
     <section className="landing-benefits"><div className="landing-section-heading"><span className="landing-eyebrow">TOUT AU MÊME ENDROIT</span><h2>Moins d’organisation à gérer.<br/><em>Plus de moments à vivre.</em></h2></div><div className="landing-feature-grid"><article className="landing-feature"><span><Heart size={20}/></span><h3>Invitations personnalisées</h3><p>Adaptez votre modèle et préparez des invitations au nom de chaque invité.</p></article><article className="landing-feature"><span><Users size={20}/></span><h3>Invités bien organisés</h3><p>Répartissez les personnes par table et gardez vos listes faciles à gérer.</p></article><article className="landing-feature"><span><ScanLine size={20}/></span><h3>Accueil avec QR code</h3><p>Vérifiez les invitations à l’entrée et suivez les arrivées simplement.</p></article></div></section>
-    <section className="landing-bottom-cta"><div><span className="landing-eyebrow">VOTRE ÉVÉNEMENT COMMENCE ICI</span><h2>Prêt à préparer votre réception ?</h2><p>Créez votre espace et rassemblez toute votre organisation au même endroit.</p></div><button className="button button-primary" onClick={() => setMode('register')}>Commencer maintenant <ChevronRight size={17}/></button></section>
-    <footer className="landing-footer"><button className="landing-brand landing-footer-brand" onClick={() => setMode('landing')}><span className="landing-brand-mark"><Heart size={18}/></span><span>mes invites</span></button><span>© 2026 Mes Invites · Vos moments, en toute simplicité.</span><button className="landing-login-link" onClick={() => setMode('login')}>Accéder à mon espace</button></footer>
+    <section className="landing-bottom-cta"><div><span className="landing-eyebrow">VOTRE ÉVÉNEMENT COMMENCE ICI</span><h2>Prêt à préparer votre réception ?</h2><p>Créez votre espace et rassemblez toute votre organisation au même endroit.</p></div><button className="button button-primary" onClick={() => setMode('choose-role')}>Commencer maintenant <ChevronRight size={17}/></button></section>
+    <footer className="landing-footer"><button className="landing-brand landing-footer-brand" onClick={() => setMode('landing')}><span className="landing-brand-mark"><Heart size={18}/></span><span>mes invites</span></button><span>© 2026 Mes Invites · Vos moments, en toute simplicité.</span><button className="landing-login-link" onClick={() => setMode('choose-role')}>Accéder à mon espace</button></footer>
   </main>;
-  return <main className="auth-screen"><section className="auth-card"><div className="auth-brand"><span className="auth-mark"><Heart size={24}/></span><span>Mes Invites<small>Gestion élégante de vos invitations</small></span></div><div className="auth-intro"><span className="eyebrow">ESPACE PRIVÉ</span><h1>{mode === 'register' ? 'Créez votre compte' : mode === 'collaborator' ? 'Rejoindre un espace' : 'Bon retour'}</h1><p>{mode === 'register' ? 'Inscrivez-vous pour préparer et gérer vos invitations.' : mode === 'collaborator' ? 'Demandez l’accès à l’espace de votre administrateur.' : 'Connectez-vous pour accéder à votre espace.'}</p></div>
+  return <main className="auth-screen"><section className="auth-card"><div className="auth-brand"><span className="auth-mark"><Heart size={24}/></span><span>Mes Invites<small>Gestion élégante de vos invitations</small></span></div><div className="auth-intro"><span className="eyebrow">ESPACE PRIVÉ</span><h1>{mode === 'register' ? 'Créer un espace' : mode === 'collaborator' ? 'Créer un compte collaborateur' : mode === 'collaborator-login' ? 'Connexion collaborateur' : 'Bon retour'}</h1><p>{mode === 'register' ? 'Inscrivez-vous comme responsable de l’espace.' : mode === 'collaborator' ? 'Crée un compte avec ton nom unique et le code de l’espace.' : mode === 'collaborator-login' ? 'Connecte-toi avec ton nom de collaborateur et ton mot de passe.' : 'Connectez-vous à votre espace.'}</p></div>
   <form className="form-stack auth-form" onSubmit={submit}>
   {mode === 'register' && <div className="auth-name-grid"><label>Prénom<input autoComplete="given-name" value={firstName} onChange={e=>setFirstName(e.target.value)} required/></label><label>Nom<input autoComplete="family-name" value={lastName} onChange={e=>setLastName(e.target.value)} required/></label></div>}
-  {mode === 'collaborator' && <label>Ton nom<input autoComplete="name" value={firstName} onChange={e=>setFirstName(e.target.value)} placeholder="Nom et prénom" required /></label>}
+  {(mode === 'collaborator' || mode === 'collaborator-login') && <label>Nom unique du collaborateur<input autoComplete="username" value={firstName} onChange={e=>setFirstName(e.target.value)} placeholder="Nom et prénom" required /></label>}
   {mode === 'register' && <label>Numéro WhatsApp<input type="tel" autoComplete="tel" value={whatsapp} onChange={e=>setWhatsapp(e.target.value)} placeholder="+243…" required/></label>}
-  {mode === 'collaborator' && <label>Code de l’espace<input autoComplete="off" value={projectId} onChange={e=>setProjectId(e.target.value)} placeholder="Code fourni par l’administrateur" required /></label>}
-  {mode !== 'collaborator' && <><label>Adresse e-mail<input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="vous@exemple.com" required/></label>
+  {mode === 'collaborator' && <label>Code de l’espace<input autoComplete="off" value={projectId} onChange={e=>setProjectId(e.target.value)} placeholder="Code fourni par le responsable" required /></label>}
+  {(mode === 'register' || mode === 'login') && <><label>Adresse e-mail<input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="vous@exemple.com" required/></label>
   <label>Mot de passe<input type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={e=>setPassword(e.target.value)} minLength={8} required/></label>
-  {mode === 'register' && <label>Confirmer le mot de passe<input type="password" autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} minLength={8} required/></label>}</>}
+  {mode === 'register' && <label>Confirmer le mot de passe<input type="password" autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} minLength={8} required/></label>}</>}{(mode === 'collaborator' || mode === 'collaborator-login') && <label>Mot de passe<input type="password" autoComplete={mode === 'collaborator' ? 'new-password' : 'current-password'} value={password} onChange={e=>setPassword(e.target.value)} minLength={8} required/></label>}
   {error && <p className="auth-alert auth-error" role="alert">{error}</p>}{message && <p className="auth-alert auth-success" role="status">{message}</p>}
   {verificationPending && mode === 'login' && <button className="button button-secondary auth-submit" disabled={busy} type="button" onClick={async()=>{if(!auth) return;setBusy(true);setError('');try{const credential=await signInWithEmailAndPassword(auth,email.trim(),password);await sendEmailVerification(credential.user);await signOut(auth);setMessage('Nouveau lien de vérification envoyé.');}catch(e){setError(e instanceof Error?e.message:'Impossible de renvoyer le lien.');}finally{setBusy(false);}}}>Renvoyer le lien de vérification</button>}
-  <button className="button button-primary auth-submit" disabled={busy} type="submit">{busy ? 'Patiente…' : mode === 'register' ? 'Créer mon compte administrateur' : mode === 'collaborator' ? 'Demander l’accès' : 'Se connecter'}</button>
-  </form><p className="auth-switch">{mode === 'collaborator' ? 'Besoin d’un compte administrateur ?' : mode === 'register' ? 'Vous avez déjà un compte ?' : 'Vous n’avez pas encore de compte ?'} <button type="button" onClick={()=>{setMode(mode === 'register' || mode === 'collaborator' ? 'login' : 'register');setError('');setMessage('');}}>{mode === 'register' || mode === 'collaborator' ? 'Se connecter' : 'Créer un compte administrateur'}</button></p><p className="auth-switch"><button type="button" onClick={()=>{setMode(mode === 'collaborator' ? 'register' : 'collaborator');setError('');setMessage('');}}>{mode === 'collaborator' ? 'Créer un espace administrateur' : 'Je suis collaborateur'}</button></p><p className="auth-footnote"><ShieldCheck size={14}/> Vos informations sont protégées.</p></section></main>;
+  <button className="button button-primary auth-submit" disabled={busy} type="submit">{busy ? 'Patiente…' : mode === 'register' ? 'Créer mon espace' : mode === 'collaborator' ? 'Créer mon compte collaborateur' : 'Se connecter'}</button>
+  </form><p className="auth-switch">{mode === 'register' ? 'Vous avez déjà un compte ?' : mode === 'login' ? 'Vous n’avez pas encore de compte ?' : mode === 'collaborator' ? 'Déjà un compte collaborateur ?' : 'Pas encore de compte collaborateur ?'} <button type="button" onClick={()=>{setMode(mode === 'register' ? 'login' : mode === 'login' ? 'register' : mode === 'collaborator' ? 'collaborator-login' : 'collaborator');setError('');setMessage('');}}>{mode === 'register' || mode === 'collaborator' ? 'Se connecter' : 'Créer un compte'}</button></p><p className="auth-switch"><button type="button" onClick={()=>{setMode('choose-role');setError('');setMessage('');}}>Changer de profil</button></p><p className="auth-footnote"><ShieldCheck size={14}/> Vos informations sont protégées.</p></section></main>;
+}
+
+function collaboratorLoginEmail(name: string) {
+  const normalized = name.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  if (normalized.length < 3) throw new Error('Le nom du collaborateur doit contenir au moins 3 caractères distinctifs.');
+  return `${normalized}@collaborateur.mesinvites.app`;
 }
 
 function StatCard({ label, value, note, icon: Icon, trend }: { label: string; value: number; note?: string; icon: typeof Users; trend?: string }) {
