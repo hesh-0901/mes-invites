@@ -13,13 +13,10 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-9YE2WTHMB3',
 };
 
-const app = getApps().length
-  ? getApp()
-  : initializeApp(firebaseConfig);
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const firestore = getFirestore(app);
 export const storage = getStorage(app);
-
 export const firebaseConfigured = true;
 export const firebaseApp = app;
