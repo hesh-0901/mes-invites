@@ -9,7 +9,9 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Html5Qrcode } from 'html5-qrcode';
-import { firebaseConfigured } from './firebase';
+import { auth, firebaseConfigured, firestore } from './firebase';
+import { createUserWithEmailAndPassword, onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 import { deleteRecord, FIRESTORE_COLLECTIONS, loadCollection, saveCheckinRecord, saveGuestRecord, saveRecord, saveTableRecord } from './firestoreData';
 import { initialCheckins, initialGuests, initialTables } from './data';
 import type { Checkin, Guest, GuestTable, InvitationKind, Salutation } from './types';
@@ -49,6 +51,12 @@ function initials(name: string) {
 }
 
 export default function App() {
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  useEffect(() => {
+    if (!auth) { setAuthReady(true); return; }
+    return onAuthStateChanged(auth, (user) => { setAuthUser(user); setAuthReady(true); });
+  }, []);
   const [page, setPage] = useState<Page>('dashboard');
   const [tables, setTables] = useState<GuestTable[]>(initialTables);
   const [guests, setGuests] = useState<Guest[]>(initialGuests);
@@ -594,6 +602,9 @@ export default function App() {
     </>
   );
 
+  if (!authReady) return <div className="auth-loading">Chargement sécurisé…</div>;
+  if (!authUser) return <AuthScreen />;
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -607,7 +618,7 @@ export default function App() {
         </nav>
         <div className="sidebar-bottom"><div className="help-card"><span className="help-icon"><CircleHelp size={18} /></span><strong>Besoin d’aide ?</strong><p>Préparez vos invitations étape par étape.</p><button onClick={() => notify('Le guide d’utilisation sera ajouté dans une prochaine version.', 'info')}>Consulter le guide <ChevronRight size={14} /></button></div><div className="profile-row"><span className="profile-avatar">H</span><span><strong>Administrateur</strong><small>Mode démonstration</small></span><MoreHorizontal size={18} /></div></div>
       </aside>
-      <main className="main-area"><header className="topbar"><div className="topbar-left"><span className="mobile-brand"><Heart size={19} /> Mes Invites</span><div className="breadcrumb-title"><span>Mes Invites</span><ChevronRight size={14} /><strong>{pageTitle}</strong></div></div><div className="topbar-actions"><span className="environment-pill"><span /> Démonstration</span><button className="icon-button notification-button" aria-label="Notifications" onClick={() => notify('Aucune nouvelle notification.', 'info')}><Bell size={18} /><i /></button><span className="topbar-divider" /><button className="profile-mini" onClick={() => navigate('settings')}><span className="profile-avatar">H</span><ChevronDown size={15} /></button></div></header>
+      <main className="main-area"><header className="topbar"><div className="topbar-left"><span className="mobile-brand"><Heart size={19} /> Mes Invites</span><div className="breadcrumb-title"><span>Mes Invites</span><ChevronRight size={14} /><strong>{pageTitle}</strong></div></div><div className="topbar-actions"><span className="environment-pill"><span /> Démonstration</span><button className="icon-button notification-button" aria-label="Notifications" onClick={() => notify('Aucune nouvelle notification.', 'info')}><Bell size={18} /><i /></button><span className="topbar-divider" /><button className="profile-mini" onClick={() => void signOut(auth!)} title="Se déconnecter"><span className="profile-avatar">{(authUser.displayName || authUser.email || 'U').slice(0,1).toUpperCase()}</span><ChevronDown size={15} /></button></div></header>
         <div className="page-content">{page === 'dashboard' && renderDashboard()}{page === 'tables' && renderTables()}{page === 'guests' && renderGuests()}{page === 'invitations' && renderInvitations()}{page === 'templates' && renderTemplates()}{page === 'scanner' && renderScanner()}{page === 'history' && renderHistory()}{page === 'settings' && renderSettings()}<footer className="page-footer"><span>© 2026 Mes Invites</span><span><span className="footer-dot" /> Les données affichées sont simulées</span></footer></div>
       </main>
       {tableModal && <Modal title="Créer une table" description="Définissez un nom clair pour retrouver facilement les invités." onClose={() => setTableModal(false)}><form onSubmit={saveTable} className="form-stack"><label>Nom ou numéro de table<input autoFocus value={newTableName} onChange={(event) => setNewTableName(event.target.value)} placeholder="Ex. Table 03" required /></label><label>Description <span className="optional-label">Facultatif</span><input value={newTableDescription} onChange={(event) => setNewTableDescription(event.target.value)} placeholder="Ex. Famille et proches" /></label><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setTableModal(false)}>Annuler</button><button type="submit" className="button button-primary"><Plus size={16} /> Créer la table</button></div></form></Modal>}
@@ -616,6 +627,63 @@ export default function App() {
       {toast && <div className={`toast toast-${toast.kind}`}><span>{toast.kind === 'success' ? <CheckCircle2 size={18} /> : toast.kind === 'error' ? <AlertTriangle size={18} /> : <CircleHelp size={18} />}</span>{toast.message}<button aria-label="Fermer" onClick={() => setToast(null)}><X size={15} /></button></div>}
     </div>
   );
+}
+
+
+function AuthScreen() {
+  const [mode, setMode] = useState<'register' | 'login'>('register');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const submit = async (event: FormEvent) => {
+    event.preventDefault(); setError(''); setMessage('');
+    if (!auth || !firestore) { setError('Firebase n’est pas configuré.'); return; }
+    if (mode === 'register' && password !== confirmPassword) { setError('Les deux mots de passe ne correspondent pas.'); return; }
+    if (mode === 'register' && password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); return; }
+    setBusy(true);
+    try {
+      if (mode === 'register') {
+        const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+        const displayName = `${firstName.trim()} ${lastName.trim()}`.trim();
+        await updateProfile(credential.user, { displayName });
+        await setDoc(doc(firestore, 'users', credential.user.uid), {
+          uid: credential.user.uid, firstName: firstName.trim(), lastName: lastName.trim(),
+          whatsapp: whatsapp.trim(), email: email.trim().toLowerCase(), createdAt: new Date().toISOString(),
+        });
+        await sendEmailVerification(credential.user);
+        setMessage('Compte créé. Un e-mail de vérification vient de t’être envoyé.');
+      } else {
+        await signInWithEmailAndPassword(auth, email.trim(), password);
+      }
+    } catch (e) {
+      const code = (e as { code?: string }).code ?? '';
+      const messages: Record<string,string> = {
+        'auth/email-already-in-use': 'Cette adresse e-mail possède déjà un compte.',
+        'auth/invalid-email': 'Adresse e-mail invalide.',
+        'auth/weak-password': 'Choisis un mot de passe plus robuste.',
+        'auth/invalid-credential': 'Adresse e-mail ou mot de passe incorrect.',
+        'auth/too-many-requests': 'Trop de tentatives. Réessaie plus tard.',
+        'permission-denied': 'Le profil n’a pas pu être enregistré : vérifie les règles Firestore.',
+      };
+      setError(messages[code] ?? (e instanceof Error ? e.message : 'Une erreur est survenue.'));
+    } finally { setBusy(false); }
+  };
+  return <main className="auth-screen"><section className="auth-card"><div className="auth-brand"><span className="auth-mark"><Heart size={24}/></span><span>Mes Invites<small>Gestion élégante de vos invitations</small></span></div><div className="auth-intro"><span className="eyebrow">ESPACE PRIVÉ</span><h1>{mode === 'register' ? 'Créez votre compte' : 'Bon retour'}</h1><p>{mode === 'register' ? 'Inscrivez-vous pour préparer et gérer vos invitations.' : 'Connectez-vous pour accéder à votre espace.'}</p></div>
+  <form className="form-stack auth-form" onSubmit={submit}>
+  {mode === 'register' && <div className="auth-name-grid"><label>Prénom<input autoComplete="given-name" value={firstName} onChange={e=>setFirstName(e.target.value)} required/></label><label>Nom<input autoComplete="family-name" value={lastName} onChange={e=>setLastName(e.target.value)} required/></label></div>}
+  {mode === 'register' && <label>Numéro WhatsApp<input type="tel" autoComplete="tel" value={whatsapp} onChange={e=>setWhatsapp(e.target.value)} placeholder="+243…" required/></label>}
+  <label>Adresse e-mail<input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="vous@exemple.com" required/></label>
+  <label>Mot de passe<input type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={e=>setPassword(e.target.value)} minLength={8} required/></label>
+  {mode === 'register' && <label>Confirmer le mot de passe<input type="password" autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} minLength={8} required/></label>}
+  {error && <p className="auth-alert auth-error" role="alert">{error}</p>}{message && <p className="auth-alert auth-success" role="status">{message}</p>}
+  <button className="button button-primary auth-submit" disabled={busy} type="submit">{busy ? 'Patiente…' : mode === 'register' ? 'Créer mon compte' : 'Se connecter'}</button>
+  </form><p className="auth-switch">{mode === 'register' ? 'Vous avez déjà un compte ?' : 'Vous n’avez pas encore de compte ?'} <button type="button" onClick={()=>{setMode(mode === 'register' ? 'login' : 'register');setError('');setMessage('');}}>{mode === 'register' ? 'Se connecter' : 'Créer un compte'}</button></p><p className="auth-footnote"><ShieldCheck size={14}/> Vos informations sont protégées.</p></section></main>;
 }
 
 function StatCard({ label, value, note, icon: Icon, trend }: { label: string; value: number; note?: string; icon: typeof Users; trend?: string }) {
