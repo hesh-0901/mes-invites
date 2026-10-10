@@ -1,0 +1,19 @@
+{
+  "name": "Mes Invites — Gestion des invitations",
+  "short_name": "Mes Invites",
+  "description": "Gestion des tables, invitations de mariage et contrôle des entrées.",
+  "lang": "fr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8f7f5",
+  "theme_color": "#762d40",
+  "icons": [
+    {
+      "src": "/mes-invites.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
