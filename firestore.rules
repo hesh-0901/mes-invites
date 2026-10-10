@@ -23,7 +23,10 @@ service cloud.firestore {
       return signedIn() && hasProfile()
         && userProfile().role == 'admin'
         && userProfile().status == 'approved'
-        && userProfile().projectId == projectId;
+        && userProfile().projectId == projectId
+        && exists(/databases/$(database)/documents/projects/$(projectId))
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.ownerUid == request.auth.uid
+        && get(/databases/$(database)/documents/projects/$(projectId)).data.status == 'active';
     }
 
     function activeProject(projectId) {
@@ -32,12 +35,16 @@ service cloud.firestore {
     }
 
     function isApprovedProjectMember(projectId) {
-      return hasProfile()
+      return signedIn() && hasProfile()
         && userProfile().status == 'approved'
         && userProfile().projectId == projectId
+        && activeProject(projectId)
         && (
-          (userProfile().role == 'collaborator')
-          || (signedIn() && userProfile().role == 'admin')
+          userProfile().role == 'collaborator'
+          || (
+            userProfile().role == 'admin'
+            && get(/databases/$(database)/documents/projects/$(projectId)).data.ownerUid == request.auth.uid
+          )
         );
     }
 
