@@ -11,22 +11,24 @@ export const FIRESTORE_COLLECTIONS = {
 
 export type CollectionName = typeof FIRESTORE_COLLECTIONS[keyof typeof FIRESTORE_COLLECTIONS];
 
-export async function loadCollection<T>(name: CollectionName): Promise<T[]> {
+function projectCollection(projectId: string, name: CollectionName) {
   if (!firestore) throw new Error('Firebase n’est pas configuré.');
-  const snapshot = await getDocs(collection(firestore, name));
+  return collection(firestore, 'projects', projectId, name);
+}
+
+export async function loadCollection<T>(projectId: string, name: CollectionName): Promise<T[]> {
+  const snapshot = await getDocs(projectCollection(projectId, name));
   return snapshot.docs.map((item) => ({ ...item.data(), id: item.id }) as T);
 }
 
-export async function saveRecord<T extends { id: string }>(name: CollectionName, record: T): Promise<void> {
-  if (!firestore) throw new Error('Firebase n’est pas configuré.');
-  await setDoc(doc(firestore, name, record.id), record, { merge: true });
+export async function saveRecord<T extends { id: string }>(projectId: string, name: CollectionName, record: T): Promise<void> {
+  await setDoc(doc(projectCollection(projectId, name), record.id), record, { merge: true });
 }
 
-export async function deleteRecord(name: CollectionName, id: string): Promise<void> {
-  if (!firestore) throw new Error('Firebase n’est pas configuré.');
-  await deleteDoc(doc(firestore, name, id));
+export async function deleteRecord(projectId: string, name: CollectionName, id: string): Promise<void> {
+  await deleteDoc(doc(projectCollection(projectId, name), id));
 }
 
-export const saveTableRecord = (record: GuestTable) => saveRecord(FIRESTORE_COLLECTIONS.tables, record);
-export const saveGuestRecord = (record: Guest) => saveRecord(FIRESTORE_COLLECTIONS.guests, record);
-export const saveCheckinRecord = (record: Checkin) => saveRecord(FIRESTORE_COLLECTIONS.checkins, record);
+export const saveTableRecord = (projectId: string, record: GuestTable) => saveRecord(projectId, FIRESTORE_COLLECTIONS.tables, record);
+export const saveGuestRecord = (projectId: string, record: Guest) => saveRecord(projectId, FIRESTORE_COLLECTIONS.guests, record);
+export const saveCheckinRecord = (projectId: string, record: Checkin) => saveRecord(projectId, FIRESTORE_COLLECTIONS.checkins, record);
