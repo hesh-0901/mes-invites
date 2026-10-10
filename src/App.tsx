@@ -641,6 +641,7 @@ function AuthScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [verificationPending, setVerificationPending] = useState(false);
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setError(''); setMessage('');
     if (!auth || !firestore) { setError('Firebase n’est pas configuré.'); return; }
@@ -657,9 +658,17 @@ function AuthScreen() {
           whatsapp: whatsapp.trim(), email: email.trim().toLowerCase(), createdAt: new Date().toISOString(),
         });
         await sendEmailVerification(credential.user);
-        setMessage('Compte créé. Un e-mail de vérification vient de t’être envoyé.');
+        setVerificationPending(true);
+        setMessage('Compte créé. Consulte ta boîte mail et clique sur le lien de vérification avant de te connecter.');
+        await signOut(auth);
       } else {
-        await signInWithEmailAndPassword(auth, email.trim(), password);
+        const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+        if (!credential.user.emailVerified) {
+          await signOut(auth);
+          setVerificationPending(true);
+          setError('Ton adresse e-mail n’est pas encore vérifiée. Ouvre le lien reçu par e-mail avant de te connecter.');
+          return;
+        }
       }
     } catch (e) {
       const code = (e as { code?: string }).code ?? '';
@@ -669,6 +678,7 @@ function AuthScreen() {
         'auth/weak-password': 'Choisis un mot de passe plus robuste.',
         'auth/invalid-credential': 'Adresse e-mail ou mot de passe incorrect.',
         'auth/too-many-requests': 'Trop de tentatives. Réessaie plus tard.',
+        'auth/user-not-found': 'Aucun compte ne correspond à cette adresse.',
         'permission-denied': 'Le profil n’a pas pu être enregistré : vérifie les règles Firestore.',
       };
       setError(messages[code] ?? (e instanceof Error ? e.message : 'Une erreur est survenue.'));
@@ -682,6 +692,7 @@ function AuthScreen() {
   <label>Mot de passe<input type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={e=>setPassword(e.target.value)} minLength={8} required/></label>
   {mode === 'register' && <label>Confirmer le mot de passe<input type="password" autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} minLength={8} required/></label>}
   {error && <p className="auth-alert auth-error" role="alert">{error}</p>}{message && <p className="auth-alert auth-success" role="status">{message}</p>}
+  {verificationPending && mode === 'login' && <button className="button button-secondary auth-submit" disabled={busy} type="button" onClick={async()=>{if(!auth) return;setBusy(true);setError('');try{const credential=await signInWithEmailAndPassword(auth,email.trim(),password);await sendEmailVerification(credential.user);await signOut(auth);setMessage('Nouveau lien de vérification envoyé.');}catch(e){setError(e instanceof Error?e.message:'Impossible de renvoyer le lien.');}finally{setBusy(false);}}}>Renvoyer le lien de vérification</button>}
   <button className="button button-primary auth-submit" disabled={busy} type="submit">{busy ? 'Patiente…' : mode === 'register' ? 'Créer mon compte' : 'Se connecter'}</button>
   </form><p className="auth-switch">{mode === 'register' ? 'Vous avez déjà un compte ?' : 'Vous n’avez pas encore de compte ?'} <button type="button" onClick={()=>{setMode(mode === 'register' ? 'login' : 'register');setError('');setMessage('');}}>{mode === 'register' ? 'Se connecter' : 'Créer un compte'}</button></p><p className="auth-footnote"><ShieldCheck size={14}/> Vos informations sont protégées.</p></section></main>;
 }
