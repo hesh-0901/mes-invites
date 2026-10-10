@@ -207,6 +207,34 @@ export default function App() {
     openTable(table.id);
   };
 
+  const editTable = (table: GuestTable) => {
+    const name = window.prompt('Nouveau nom de la table :', table.name)?.trim();
+    if (!name) return;
+    const description = window.prompt('Description de la table :', table.description ?? '') ?? table.description ?? '';
+    if (tables.some((item) => item.id !== table.id && item.name.toLocaleLowerCase('fr') === name.toLocaleLowerCase('fr'))) {
+      notify('Une table porte déjà ce nom.', 'error');
+      return;
+    }
+    const updated = { ...table, name, description: description.trim() };
+    setTables((current) => current.map((item) => item.id === table.id ? updated : item));
+    void saveTableRecord(updated).catch(() => notify('La table a été modifiée localement, mais la synchronisation a échoué.', 'error'));
+    notify('Table modifiée.');
+  };
+
+  const deleteTable = (table: GuestTable) => {
+    const assigned = guests.filter((guest) => guest.tableId === table.id).length;
+    if (assigned > 0) {
+      notify(`Impossible de supprimer cette table : ${assigned} invité(s) y sont encore affectés. Réaffecte-les d’abord.`, 'error');
+      return;
+    }
+    if (!window.confirm(`Première confirmation : supprimer la table « ${table.name} » ?`)) return;
+    if (!window.confirm(`Deuxième confirmation : cette suppression est définitive. Confirmer la suppression de « ${table.name} » ?`)) return;
+    setTables((current) => current.filter((item) => item.id !== table.id));
+    void deleteRecord(FIRESTORE_COLLECTIONS.tables, table.id).catch(() => notify('La suppression locale est faite, mais la synchronisation a échoué.', 'error'));
+    if (activeTableId === table.id) setActiveTableId(null);
+    notify('Table supprimée.', 'info');
+  };
+
   const openAddGuest = (guest?: Guest) => {
     if (!guest && !activeTableId) {
       notify('Ouvre une table avant d’ajouter un invité.', 'error');
@@ -319,7 +347,8 @@ export default function App() {
   }, []);
 
   const deleteGuest = (guest: Guest) => {
-    if (!window.confirm(`Supprimer ${guest.displayName} des données de démonstration ?`)) return;
+    if (!window.confirm(`Première confirmation : supprimer l’invité « ${guest.displayName} » ?`)) return;
+    if (!window.confirm(`Deuxième confirmation : la suppression de « ${guest.displayName} » est définitive. Confirmer ?`)) return;
     setGuests((current) => current.filter((item) => item.id !== guest.id));
     void deleteRecord(FIRESTORE_COLLECTIONS.guests, guest.id).catch(() => undefined);
     setDetailGuest(null);
@@ -450,11 +479,11 @@ export default function App() {
       </section>
       <section className="dashboard-grid">
         <div className="panel panel-large"><div className="panel-heading"><div><h3>Vos tables</h3><p>Accédez directement aux listes d’invités.</p></div><button className="text-button" onClick={() => navigate('tables')}>Toutes les tables <ChevronRight size={16} /></button></div>
-          <div className="table-cards">{tables.slice(0, 4).map((table, index) => {
+          <div className="table-wrap"><table><thead><tr><th>Table</th><th>Invités</th><th>Entrées</th><th>Actions</th></tr></thead><tbody>{tables.map((table) => {
             const tableGuests = guests.filter((guest) => guest.tableId === table.id);
             const checked = tableGuests.filter((guest) => guest.checkinStatus === 'checked-in').length;
-            return <button className="table-card" key={table.id} onClick={() => openTable(table.id)}><span className={`table-icon table-icon-${index % 3}`}><Table2 size={19} /></span><span className="table-card-main"><strong>{table.name}</strong><small>{table.description || 'Aucune description'}</small><span className="mini-progress"><span style={{ width: `${tableGuests.length ? checked / tableGuests.length * 100 : 0}%` }} /></span><small>{tableGuests.length} invité(s) · {checked} entrée(s)</small></span><ChevronRight size={17} className="muted-icon" /></button>;
-          })}</div>
+            return <tr key={table.id}><td><button className="guest-cell" onClick={() => openTable(table.id)}><span className="avatar"><Table2 size={16} /></span><span><strong>{table.name}</strong><small>{table.description || 'Aucune description'}</small></span></button></td><td>{tableGuests.length}</td><td>{checked}</td><td><div className="inline-actions"><button className="icon-button" aria-label={`Modifier ${table.name}`} title="Modifier" onClick={() => editTable(table)}><Pencil size={16} /></button><button className="icon-button" aria-label={`Supprimer ${table.name}`} title="Supprimer" onClick={() => deleteTable(table)}><Trash2 size={16} /></button></div></td></tr>;
+          })}{tables.length === 0 && <tr><td colSpan={4}>Aucune table créée.</td></tr>}</tbody></table></div>
           <button className="add-table-line" onClick={() => setTableModal(true)}><Plus size={16} /> Créer une table</button>
         </div>
         <div className="panel"><div className="panel-heading"><div><h3>Activité récente</h3><p>Derniers mouvements</p></div><Activity size={18} className="muted-icon" /></div>
