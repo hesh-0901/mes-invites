@@ -884,17 +884,20 @@ function AuthScreen() {
     let operation = 'initialisation';
     try {
       if (mode === 'collaborator') {
-        operation = 'lecture du projet';
         const normalizedProjectId = projectId.trim();
         const cleanName = firstName.trim();
         if (!cleanName) { setError('Saisis ton nom.'); return; }
+        // Firestore rules require authentication to read project metadata.
+        operation = 'authentification anonyme';
+        const credential = auth.currentUser?.isAnonymous
+          ? { user: auth.currentUser }
+          : await signInAnonymously(auth);
+        operation = 'lecture du projet';
         const projectSnapshot = await getDoc(doc(firestore, 'projects', normalizedProjectId));
         if (!projectSnapshot.exists() || projectSnapshot.data().status !== 'active') {
           setError('Code d’espace introuvable ou inactif. Vérifie le code fourni par l’administrateur.');
           return;
         }
-        operation = 'authentification anonyme';
-        const credential = await signInAnonymously(auth);
         await updateProfile(credential.user, { displayName: cleanName });
         operation = 'création du profil collaborateur';
         await setDoc(doc(firestore, 'users', credential.user.uid), {
