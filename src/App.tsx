@@ -55,7 +55,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   useEffect(() => {
     if (!auth) { setAuthReady(true); return; }
-    return onAuthStateChanged(auth, (user) => { setAuthUser(user); setAuthReady(true); });
+    return onAuthStateChanged(auth, (user) => { setAuthUser(user?.emailVerified ? user : null); setAuthReady(true); });
   }, []);
   const [page, setPage] = useState<Page>('dashboard');
   const [tables, setTables] = useState<GuestTable[]>(initialTables);
