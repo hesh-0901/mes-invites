@@ -10,7 +10,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Html5Qrcode } from 'html5-qrcode';
 import { firebaseConfigured } from './firebase';
-import { deleteRecord, FIRESTORE_COLLECTIONS, loadCollection, saveCheckinRecord, saveGuestRecord, saveTableRecord } from './firestoreData';
+import { deleteRecord, FIRESTORE_COLLECTIONS, loadCollection, saveCheckinRecord, saveGuestRecord, saveRecord, saveTableRecord } from './firestoreData';
 import { initialCheckins, initialGuests, initialTables } from './data';
 import type { Checkin, Guest, GuestTable, InvitationKind, Salutation } from './types';
 
@@ -480,6 +480,7 @@ export default function App() {
       window.localStorage.setItem('mes-invites-template-name-size', String(templateNameSize));
       window.localStorage.setItem('mes-invites-template-name-width', String(templateNameWidth));
       window.localStorage.setItem('mes-invites-template-locked', 'true');
+      void saveRecord(FIRESTORE_COLLECTIONS.settings, { id: 'template', imageUrl: templateImage, nameX: templateNameX, nameY: templateNameY, qrX: templateQrX, qrY: templateQrY, qrSize: templateQrSize, nameSize: templateNameSize, nameWidth: templateNameWidth, locked: true, updatedAt: new Date().toISOString() }).catch(() => undefined);
       setTemplateLocked(true);
       notify('Modèle enregistré. Éditeur verrouillé.');
     } catch { notify('Impossible d’enregistrer les paramètres du template.', 'error'); }
