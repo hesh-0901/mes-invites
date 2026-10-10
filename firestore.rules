@@ -2,25 +2,44 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Chaque utilisateur peut accéder uniquement à son propre profil.
+    // Profil personnel : un utilisateur ne peut accéder qu'à son propre document.
+    // La création est autorisée avant la vérification de l'e-mail, car le profil
+    // est enregistré pendant le processus d'inscription.
     match /users/{userId} {
       allow create: if request.auth != null
         && request.auth.uid == userId
         && request.resource.data.uid == request.auth.uid;
-      allow read, update: if request.auth != null
+      allow read: if request.auth != null
         && request.auth.uid == userId
         && resource.data.uid == request.auth.uid;
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid;
       allow delete: if false;
     }
 
-    // Les données de l'événement restent fermées jusqu'à la mise en place
-    // de règles multi-utilisateur et d'un modèle de propriété des documents.
-    match /tables/{documentId} { allow read, write: if false; }
-    match /guests/{documentId} { allow read, write: if false; }
-    match /checkins/{documentId} { allow read, write: if false; }
-    match /eventSettings/{documentId} { allow read, write: if false; }
+    // Données partagées de l'événement : accès réservé aux comptes connectés
+    // dont l'adresse e-mail a été vérifiée.
+    function isVerifiedUser() {
+      return request.auth != null
+        && request.auth.token.email_verified == true;
+    }
 
-    // Refus par défaut.
+    match /tables/{documentId} {
+      allow read, create, update, delete: if isVerifiedUser();
+    }
+    match /guests/{documentId} {
+      allow read, create, update, delete: if isVerifiedUser();
+    }
+    match /checkins/{documentId} {
+      allow read, create, update, delete: if isVerifiedUser();
+    }
+    match /eventSettings/{documentId} {
+      allow read, create, update, delete: if isVerifiedUser();
+    }
+
+    // Refus par défaut pour toute autre collection.
     match /{document=**} {
       allow read, write: if false;
     }
