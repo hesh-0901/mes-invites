@@ -226,9 +226,23 @@ service cloud.firestore {
         && request.resource.data.guestName is string
         && request.resource.data.tableName is string
         && request.resource.data.operator is string
+        && request.resource.data.operatorUid == request.auth.uid
         && getAfter(/databases/$(database)/documents/projects/$(projectId)/guests/$(request.resource.data.guestId)).data.checkinStatus == 'checked-in'
         && getAfter(/databases/$(database)/documents/projects/$(projectId)/guests/$(request.resource.data.guestId)).data.lastCheckinId == checkinId
         && getAfter(/databases/$(database)/documents/projects/$(projectId)/guests/$(request.resource.data.guestId)).data.checkedInAt == request.resource.data.timestamp;
+    }
+
+    function validGuestCheckinReset(projectId) {
+      return signedIn()
+        && resource.data.checkinStatus == 'checked-in'
+        && resource.data.lastCheckinId is string
+        && request.resource.data.checkinStatus == 'not-checked-in'
+        && !('checkedInAt' in request.resource.data)
+        && !('lastCheckinId' in request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['checkinStatus', 'checkedInAt', 'lastCheckinId'])
+        && exists(/databases/$(database)/documents/projects/$(projectId)/checkins/$(resource.data.lastCheckinId))
+        && get(/databases/$(database)/documents/projects/$(projectId)/checkins/$(resource.data.lastCheckinId)).data.operatorUid == request.auth.uid;
     }
 
     function validGuestCheckinUpdate(projectId, guestId) {
@@ -257,9 +271,22 @@ service cloud.firestore {
         && (collectionName != 'guests'
           || !request.resource.data.diff(resource.data).affectedKeys()
             .hasAny(['checkinStatus', 'checkedInAt', 'lastCheckinId'])
-          || validGuestCheckinUpdate(projectId, documentId));
-      allow delete: if canWriteProjectCollection(projectId, collectionName)
-        && (collectionName != 'guests' || userProfile().role != 'collaborator' || collaboratorHasMenu('guests') || collaboratorHasMenu('invitations'));
+          || validGuestCheckinUpdate(projectId, documentId)
+          || validGuestCheckinReset(projectId));
+      allow delete: if (
+          collectionName == 'checkins'
+          && (
+            isSuperAdmin()
+            || isProjectAdmin(projectId)
+            || (signedIn() && resource.data.operatorUid is string
+              && resource.data.operatorUid == request.auth.uid)
+          )
+        )
+        || (
+          collectionName != 'checkins'
+          && canWriteProjectCollection(projectId, collectionName)
+          && (collectionName != 'guests' || userProfile().role != 'collaborator' || collaboratorHasMenu('guests') || collaboratorHasMenu('invitations'))
+        );
     }
 
     // Legacy unscoped collections remain blocked until project-scoped migration.
