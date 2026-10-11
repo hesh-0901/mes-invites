@@ -963,47 +963,46 @@ export default function App() {
         <div className="access-page">
           <section className="access-overview">
             <div className="access-overview-heading">
-              <div><span className="access-eyebrow">GESTION DES UTILISATEURS</span><h3>Accès &amp; comptes</h3><p>Gérez les demandes, les comptes et les autorisations depuis un espace unique.</p></div>
+              <h3>Accès &amp; comptes</h3>
               <button type="button" className="access-refresh" onClick={() => { void loadAdminRequests(); if (!isSuperAdmin) void loadProjectCollaborators(); }} disabled={requestsLoading || collaboratorsLoading}><RefreshCw size={15} className={requestsLoading || collaboratorsLoading ? 'access-spin' : ''}/>{requestsLoading || collaboratorsLoading ? 'Actualisation…' : 'Actualiser'}</button>
             </div>
             <div className="access-metrics">
-              <article className="access-metric"><span className="access-metric-icon"><Bell size={17}/></span><div><small>Demandes en attente</small><strong>{adminRequests.length}</strong></div><span className="access-metric-dot access-dot-amber"/></article>
-              {!isSuperAdmin && <article className="access-metric"><span className="access-metric-icon"><Users size={17}/></span><div><small>Collaborateurs actifs</small><strong>{projectCollaborators.length}</strong></div><span className="access-metric-dot access-dot-green"/></article>}
+              <span><i className="access-dot-amber"/> {adminRequests.length} en attente</span>
+              {!isSuperAdmin && <><span className="access-metric-separator">·</span><span><i className="access-dot-green"/> {projectCollaborators.length} collaborateurs actifs</span></>}
             </div>
           </section>
 
           <section className="access-panel">
-            <div className="access-section-heading"><div><span className="access-section-index">01</span><div><h3>{isSuperAdmin ? 'Demandes propriétaire' : 'Demandes de collaboration'}</h3><p>{isSuperAdmin ? 'Examinez les demandes de création d’espace.' : 'Chaque demande doit être approuvée avant de donner accès à vos données.'}</p></div></div><span className="access-count">{adminRequests.length} en attente</span></div>
-            {requestsLoading ? <div className="access-skeleton-list" aria-label="Chargement des demandes"><div className="access-skeleton-row"/><div className="access-skeleton-row"/><div className="access-skeleton-row"/></div>
-              : adminRequests.length === 0 ? <div className="access-empty"><span className="access-empty-icon"><CheckCircle2 size={22}/></span><strong>Aucune demande en attente</strong><p>Vous êtes à jour. Les nouvelles demandes apparaîtront ici.</p></div>
+            <div className="access-section-heading"><h4>{isSuperAdmin ? 'Demandes propriétaire' : 'Demandes en attente'}</h4><span className="access-count">{adminRequests.length}</span></div>
+            {requestsLoading ? <div className="access-skeleton-list" aria-label="Chargement des demandes"><div className="access-skeleton-row"/><div className="access-skeleton-row"/></div>
+              : adminRequests.length === 0 ? <div className="access-empty"><CheckCircle2 size={16}/><span>Aucune demande en attente</span></div>
               : <div className="access-request-list">{adminRequests.map((request) => {
                 const personName = `${String(request.firstName ?? '')} ${String(request.lastName ?? '')}`.trim() || 'Utilisateur sans nom';
                 const created = typeof request.createdAt === 'string' && !Number.isNaN(Date.parse(request.createdAt)) ? new Date(request.createdAt).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}) : 'Date inconnue';
                 return <article className="access-request-card" key={String(request.uid)}>
                   <span className="access-person-avatar">{initials(personName)}</span>
-                  <div className="access-person-info"><strong>{personName}</strong><div className="access-request-meta"><span className="access-status access-status-pending"><i/>En attente</span><span>{isSuperAdmin ? 'Compte propriétaire' : 'Collaborateur'}</span></div><small>{String(request.email || request.whatsapp || (request.projectId ? `Espace · ${request.projectId}` : 'Coordonnées non renseignées'))} · {created}</small></div>
+                  <div className="access-person-info"><strong>{personName}</strong><div className="access-request-meta"><span className="access-status access-status-pending"><i/>En attente</span><span>{isSuperAdmin ? 'Propriétaire' : 'Collaborateur'}</span></div><small>{String(request.email || request.whatsapp || (request.projectId ? `Espace · ${request.projectId}` : 'Coordonnées non renseignées'))} · {created}</small></div>
                   <div className="access-request-actions"><button type="button" className="access-approve" disabled={requestActionUid !== null} onClick={() => void decideAdminRequest(String(request.uid),'approved')}>{requestActionUid === request.uid ? <LoaderCircle size={15} className="access-spin"/> : <Check size={15}/>}Approuver</button><button type="button" className="access-reject" disabled={requestActionUid !== null} onClick={() => void decideAdminRequest(String(request.uid),'rejected')}>{requestActionUid === request.uid ? <LoaderCircle size={15} className="access-spin"/> : <X size={15}/>}Refuser</button></div>
                 </article>;
               })}</div>}
           </section>
 
           {!isSuperAdmin && <section className="access-panel">
-            <div className="access-section-heading"><div><span className="access-section-index">02</span><div><h3>Collaborateurs et autorisations</h3><p>Gérez précisément les menus accessibles à chaque membre de votre espace.</p></div></div><span className="access-count">{projectCollaborators.length} membre{projectCollaborators.length > 1 ? 's' : ''}</span></div>
+            <div className="access-section-heading"><h4>Collaborateurs</h4><span className="access-count">{projectCollaborators.length}</span></div>
             {collaboratorsLoading ? <div className="access-skeleton-list" aria-label="Chargement des collaborateurs"><div className="access-skeleton-row"/><div className="access-skeleton-row"/></div>
-              : projectCollaborators.length === 0 ? <div className="access-empty"><span className="access-empty-icon"><Users size={22}/></span><strong>Aucun collaborateur actif</strong><p>Après approbation d’une demande, le collaborateur apparaîtra ici pour que vous puissiez gérer ses accès.</p></div>
+              : projectCollaborators.length === 0 ? <div className="access-empty"><Users size={16}/><span>Aucun collaborateur actif</span></div>
               : <div className="access-collaborator-list">{projectCollaborators.map((person) => {
                 const personName = String(person.displayName ?? `${String(person.firstName ?? '')} ${String(person.lastName ?? '')}`.trim()) || 'Collaborateur';
                 const permissions = Array.isArray(person.permissions) ? person.permissions as string[] : defaultCollaboratorMenus;
                 return <article className="access-collaborator-card" key={String(person.uid)}>
                   <span className="access-person-avatar">{initials(personName)}</span>
-                  <div className="access-person-info"><strong>{personName}</strong><div className="access-request-meta"><span className="access-status access-status-active"><i/>Actif</span><span className="access-menu-count">{permissions.length} sur {navItems.length} menus</span></div></div>
-                  <div className="access-collaborator-actions"><button type="button" className="access-edit-button" onClick={() => openCollaboratorEditor(person)}><Pencil size={15}/>Modifier</button><button type="button" className="access-manage-button" onClick={() => openPermissions(person)}><Settings size={15}/>Accès<ChevronRight size={15}/></button><button type="button" className="access-remove-button" disabled={removingCollaboratorUid === person.uid} onClick={() => void removeCollaborator(person)} aria-label={"Retirer " + personName} title="Retirer du projet">{removingCollaboratorUid === person.uid ? <LoaderCircle size={15} className="access-spin"/> : <Trash2 size={15}/>}</button></div>
+                  <div className="access-person-info"><strong>{personName}</strong><div className="access-request-meta"><span className="access-status access-status-active"><i/>Actif</span><span className="access-menu-count">{permissions.length}/{navItems.length} menus</span></div></div>
+                  <div className="access-collaborator-actions"><button type="button" className="access-edit-button" onClick={() => openCollaboratorEditor(person)} aria-label={`Modifier le profil de ${personName}`} title="Modifier le profil"><Pencil size={15}/></button><button type="button" className="access-manage-button" onClick={() => openPermissions(person)}><Settings size={15}/>Gérer les accès</button><button type="button" className="access-remove-button" disabled={removingCollaboratorUid === person.uid} onClick={() => void removeCollaborator(person)} aria-label={"Retirer " + personName} title="Retirer du projet">{removingCollaboratorUid === person.uid ? <LoaderCircle size={15} className="access-spin"/> : <Trash2 size={15}/>}</button></div>
                 </article>;
               })}</div>}
           </section>}
-          <div className="access-security-note"><LockKeyhole size={17}/><p><strong>Accès protégés par Firestore</strong><span>Les permissions sont appliquées côté base de données. Un collaborateur ne peut accéder qu’à son propre espace.</span></p></div>
         </div>
-      </>}
+
     </>
   );
 
