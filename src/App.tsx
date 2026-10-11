@@ -12,7 +12,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { Html5Qrcode } from 'html5-qrcode';
 import { auth, firebaseConfigured, firestore } from './firebase';
 import { createUserWithEmailAndPassword, deleteUser, onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth';
-import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, where, setDoc, updateDoc, runTransaction } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, where, setDoc, updateDoc, runTransaction, writeBatch } from 'firebase/firestore';
 import { deleteRecord, FIRESTORE_COLLECTIONS, saveCheckinRecord, saveGuestRecord, saveRecord, saveTableRecord } from './firestoreData';
 import type { Checkin, Guest, GuestTable, InvitationKind, Salutation } from './types';
 
@@ -138,6 +138,7 @@ export default function App() {
   const [historyTableFilter, setHistoryTableFilter] = useState('all');
   const [historyNameFilter, setHistoryNameFilter] = useState('');
   const [historyOperatorFilter, setHistoryOperatorFilter] = useState('all');
+  const [resettingProjects, setResettingProjects] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [tableModal, setTableModal] = useState(false);
   const [editingTable, setEditingTable] = useState<GuestTable | null>(null);
@@ -971,6 +972,48 @@ export default function App() {
     </>
   );
 
+  const resetAllProjectData = async () => {
+    if (!firestore || !isSuperAdmin || resettingProjects) return;
+    const confirmation = window.prompt('Cette opération supprimera les tables, invités, historiques et paramètres de TOUS les projets. Les comptes utilisateurs et les documents projets seront conservés. Tape RESET pour confirmer.');
+    if (confirmation !== 'RESET') {
+      if (confirmation !== null) notify('Réinitialisation annulée : confirmation incorrecte.', 'info');
+      return;
+    }
+    setResettingProjects(true);
+    try {
+      const projectsSnapshot = await getDocs(collection(firestore, 'projects'));
+      const subcollections = ['tables', 'guests', 'checkins', 'eventSettings'];
+      let deletedCount = 0;
+      for (const project of projectsSnapshot.docs) {
+        for (const subcollectionName of subcollections) {
+          const records = await getDocs(collection(firestore, 'projects', project.id, subcollectionName));
+          for (let offset = 0; offset < records.docs.length; offset += 400) {
+            const batch = writeBatch(firestore);
+            records.docs.slice(offset, offset + 400).forEach((record) => batch.delete(record.ref));
+            await batch.commit();
+            deletedCount += Math.min(400, records.docs.length - offset);
+          }
+        }
+      }
+      setTables([]);
+      setGuests([]);
+      setCheckins([]);
+      setTemplateImage('');
+      setTemplateSettingsReady(false);
+      setTemplateSettingsProjectId(null);
+      try {
+        window.localStorage.removeItem('mes-invites-template-image');
+        window.localStorage.removeItem('mes-invites-template-locked');
+      } catch { /* Le cache local est facultatif. */ }
+      notify(`Réinitialisation terminée : ${deletedCount} documents supprimés dans ${projectsSnapshot.size} projets. Les utilisateurs et les projets sont conservés.`, 'success');
+    } catch (error) {
+      console.error('Réinitialisation des projets impossible', error);
+      notify('Réinitialisation incomplète. Vérifie les règles Firestore et les droits super administrateur.', 'error');
+    } finally {
+      setResettingProjects(false);
+    }
+  };
+
   const loadAdminRequests = async () => {
     if (!firestore || (!isSuperAdmin && currentProfile?.role !== 'admin')) return;
     setRequestsLoading(true);
@@ -1227,6 +1270,15 @@ export default function App() {
               {!isSuperAdmin && <><span className="access-metric-separator">·</span><span><i className="access-dot-green"/> {projectCollaborators.length} collaborateurs actifs</span></>}
             </div>
           </section>
+
+          {isSuperAdmin && <section className="access-panel reset-projects-panel">
+            <div className="access-section-heading"><h4>Réinitialisation des projets</h4><span className="access-status access-status-pending"><i/>Action destructive</span></div>
+            <p>Supprime les tables, les invités, les historiques de contrôle et les paramètres d’invitation de tous les projets. Les comptes utilisateurs et les documents projets sont conservés.</p>
+            <button type="button" className="button button-danger-ghost" onClick={() => void resetAllProjectData()} disabled={resettingProjects}>
+              {resettingProjects ? <LoaderCircle size={16} className="access-spin"/> : <Trash2 size={16}/>}
+              {resettingProjects ? 'Réinitialisation en cours…' : 'Réinitialiser tous les projets'}
+            </button>
+          </section>}
 
           <section className="access-panel">
             <div className="access-section-heading"><h4>{isSuperAdmin ? 'Demandes propriétaire' : 'Demandes en attente'}</h4><span className="access-count">{adminRequests.length}</span></div>
