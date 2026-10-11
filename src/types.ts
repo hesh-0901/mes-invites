@@ -15,6 +15,7 @@ export interface Guest {
   checkinStatus: CheckinStatus;
   token?: string;
   checkedInAt?: string;
+  lastCheckinId?: string;
 }
 
 export interface GuestTable {
