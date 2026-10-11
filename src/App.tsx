@@ -303,9 +303,9 @@ export default function App() {
 
   const activeTable = tables.find((table) => table.id === activeTableId) ?? null;
   const visibleGuests = useMemo(() => guests.filter((guest) => {
-    const matchesSearch = guest.displayName.toLocaleLowerCase('fr').includes(search.toLocaleLowerCase('fr'));
+    const matchesSearch = guest.displayName.toLocaleLowerCase('fr').includes(guestNameFilter.toLocaleLowerCase('fr'));
     return matchesSearch && (!activeTableId || page !== 'guests' || guest.tableId === activeTableId);
-  }), [guests, search, activeTableId, page]);
+  }), [guests, guestNameFilter, activeTableId, page]);
   const visibleGuestRows = visibleGuests.filter((guest) =>
     guest.displayName.toLocaleLowerCase('fr').includes(guestNameFilter.toLocaleLowerCase('fr')) &&
     (guestTableFilter === 'all' || guest.tableId === guestTableFilter) &&
