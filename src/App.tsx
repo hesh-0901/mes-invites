@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  Activity, ArrowDownRight, Bell, Check, CheckCircle2, ChevronDown,
+  Activity, ArrowDownRight, Bell, Check, CheckCircle2, ChevronDown, LoaderCircle, RefreshCw,
   ChevronLeft, ChevronRight, CircleHelp, ClipboardList, Download, Eye,
   FileImage, Heart, LayoutDashboard, MoreHorizontal, Plus, QrCode,
   ScanLine, Search, Settings, ShieldCheck, Sparkles, Table2, Ticket, Users, X,
   AlertTriangle, Camera, LockKeyhole, Trash2, Pencil,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { createPortal } from 'react-dom';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Html5Qrcode } from 'html5-qrcode';
 import { auth, firebaseConfigured, firestore } from './firebase';
@@ -61,6 +62,8 @@ export default function App() {
   const [permissionDraft, setPermissionDraft] = useState<string[]>([]);
   const [permissionsSaving, setPermissionsSaving] = useState(false);
   const [requestsLoading, setRequestsLoading] = useState(false);
+  const [collaboratorsLoading, setCollaboratorsLoading] = useState(false);
+  const [requestActionUid, setRequestActionUid] = useState<string | null>(null);
   useEffect(() => {
     if (!auth) { setAuthReady(true); return; }
     return onAuthStateChanged(auth, async (user) => {
@@ -739,12 +742,13 @@ export default function App() {
 
   const loadProjectCollaborators = async () => {
     if (!firestore || !projectId || currentProfile?.role !== 'admin') return;
+    setCollaboratorsLoading(true);
     try {
       const snapshot = await getDocs(query(collection(firestore, 'users'), where('role', '==', 'collaborator'), where('projectId', '==', projectId), where('status', '==', 'approved')));
       setProjectCollaborators(snapshot.docs.map((entry) => ({ ...entry.data(), uid: entry.id })));
     } catch {
       notify('Impossible de charger les collaborateurs approuvés.', 'error');
-    }
+    } finally { setCollaboratorsLoading(false); }
   };
 
   const openPermissions = (collaborator: Record<string, unknown>) => {
@@ -770,6 +774,7 @@ export default function App() {
 
   const decideAdminRequest = async (uid: string, status: 'approved' | 'rejected') => {
     if (!firestore || (!isSuperAdmin && currentProfile?.role !== 'admin')) return;
+    setRequestActionUid(uid);
     let stage = 'lecture de la demande';
     try {
       const requestSnapshot = await getDoc(doc(firestore, 'users', uid));
@@ -799,7 +804,7 @@ export default function App() {
       const code = firebaseError.code ?? 'erreur-inconnue';
       console.error('Échec de la décision d’accès :', code, firebaseError.message ?? error);
       notify(`Échec pendant : ${stage} (${code}). Vérifie les règles Firestore publiées.`, 'error');
-    }
+    } finally { setRequestActionUid(null); }
   };
 
   const [settingsTab, setSettingsTab] = useState<'general' | 'event' | 'template' | 'access'>('general');
@@ -838,18 +843,50 @@ export default function App() {
       {settingsTab === 'event' && <section className="panel settings-detail-panel"><div className="panel-heading"><div><h3>Informations de l’événement</h3><p>Les détails de votre réception seront configurables ici.</p></div><Heart size={20} className="muted-icon"/></div><div className="event-placeholder"><span className="event-monogram">M<span>&</span>I</span><strong>Votre événement</strong><p>Le nom des mariés, la date, le lieu et les informations de contact seront regroupés dans cette section.</p><span className="status-pill status-neutral"><span className="status-dot"/>À configurer</span></div></section>}
       {settingsTab === 'template' && <section className="panel settings-detail-panel"><div className="panel-heading"><div><h3>Modèle d’invitation</h3><p>Gérez le visuel utilisé pour personnaliser vos invitations.</p></div><FileImage size={20} className="muted-icon"/></div><div className="settings-template-summary"><span className="setting-icon"><FileImage size={20}/></span><div><strong>{templateImage ? 'Un modèle est chargé' : 'Aucun modèle importé'}</strong><small>{templateImage ? 'Le modèle est prêt dans l’éditeur.' : 'Importez un PNG, JPG ou WebP dans Templates.'}</small></div></div><button className="button button-primary" onClick={() => navigate('templates')}><FileImage size={16}/> Ouvrir l’éditeur de templates</button></section>}
       {settingsTab === 'access' && (isSuperAdmin || currentProfile?.role === 'admin') && <>
-        <section className="access-overview">
-          <div className="access-overview-heading"><div><span className="eyebrow">GESTION DES UTILISATEURS</span><h3>Accès & comptes</h3><p>Gérez les demandes et les autorisations des membres de votre espace.</p></div><button className="button button-secondary" onClick={() => { void loadAdminRequests(); if (!isSuperAdmin) void loadProjectCollaborators(); }} disabled={requestsLoading}><Activity size={16}/>{requestsLoading ? 'Actualisation…' : 'Actualiser'}</button></div>
-          <div className="access-metrics"><article className="access-metric"><span className="access-metric-icon"><Bell size={19}/></span><div><small>Demandes en attente</small><strong>{adminRequests.length}</strong></div></article>{!isSuperAdmin && <article className="access-metric"><span className="access-metric-icon"><Users size={19}/></span><div><small>Collaborateurs approuvés</small><strong>{projectCollaborators.length}</strong></div></article>}<article className="access-metric"><span className="access-metric-icon"><ShieldCheck size={19}/></span><div><small>Sécurité</small><strong>Activée</strong></div></article></div>
-        </section>
-        <section className="panel access-section"><div className="access-section-heading"><div><span className="access-step">01</span><div><h3>{isSuperAdmin ? 'Demandes administrateur' : 'Demandes de collaboration'}</h3><p>{isSuperAdmin ? 'Examinez les demandes de création de compte.' : 'Approuvez les membres avant de leur ouvrir votre espace.'}</p></div></div><span className="access-count">{adminRequests.length} en attente</span></div>
-          {requestsLoading ? <div className="access-empty">Chargement des demandes…</div> : adminRequests.length === 0 ? <div className="access-empty"><ShieldCheck size={25}/><strong>Aucune demande en attente</strong><p>Les nouvelles demandes apparaîtront ici.</p></div> : <div className="access-request-list">{adminRequests.map((request) => <article className="access-request-card" key={String(request.uid)}><span className="access-person-avatar">{String(request.firstName ?? 'U').slice(0,1).toUpperCase()}</span><div className="access-person-info"><strong>{String(request.firstName ?? '')} {String(request.lastName ?? '')}</strong><span>{isSuperAdmin ? 'Compte administrateur' : 'Demande de collaboration'}</span><small>{String(request.email || request.whatsapp || 'Coordonnées non renseignées')} · {String(request.createdAt ?? 'Date inconnue').slice(0,10)}</small></div><div className="access-request-actions"><button className="button button-primary" onClick={() => void decideAdminRequest(String(request.uid), 'approved')}><Check size={15}/> Approuver</button><button className="button button-danger-ghost" onClick={() => void decideAdminRequest(String(request.uid), 'rejected')}><X size={15}/> Refuser</button></div></article>)}</div>}
-        </section>
-        {!isSuperAdmin && <section className="panel access-section"><div className="access-section-heading"><div><span className="access-step">02</span><div><h3>Collaborateurs et autorisations</h3><p>Les commandes de gestion sont disponibles directement sur chaque fiche.</p></div></div><span className="access-count">{projectCollaborators.length} membre(s)</span></div>
-          {projectCollaborators.length === 0 ? <div className="access-empty"><Users size={25}/><strong>Aucun collaborateur approuvé</strong><p>Les collaborateurs apparaîtront ici après approbation.</p></div> : <div className="access-collaborator-list">{projectCollaborators.map((person) => <article className="access-collaborator-card" key={String(person.uid)}><span className="access-person-avatar">{String(person.firstName ?? 'C').slice(0,1).toUpperCase()}</span><div className="access-person-info"><strong>{String(person.firstName ?? '')} {String(person.lastName ?? '')}</strong><span className="access-active-status">Accès approuvé</span></div><div className="access-permission-summary"><strong>{Array.isArray(person.permissions) ? (person.permissions as string[]).length : defaultCollaboratorMenus.length}<span>/8</span></strong><small>menus autorisés</small></div><button type="button" className="button button-primary access-manage-button" onClick={() => openPermissions(person)}><Settings size={16}/> Gérer les accès <ChevronRight size={15}/></button></article>)}</div>}
-        </section>}
-        <section className="access-security-note"><LockKeyhole size={20}/><div><strong>Gestion sécurisée</strong><p>Les accès restent soumis à approbation. Firestore continue de contrôler les autorisations sur les données.</p></div></section>
-      </>}
+        <div className="access-page">
+          <section className="access-overview">
+            <div className="access-overview-heading">
+              <div><span className="access-eyebrow">GESTION DES UTILISATEURS</span><h3>Accès &amp; comptes</h3><p>Gérez les demandes, les comptes et les autorisations depuis un espace unique.</p></div>
+              <button type="button" className="access-refresh" onClick={() => { void loadAdminRequests(); if (!isSuperAdmin) void loadProjectCollaborators(); }} disabled={requestsLoading || collaboratorsLoading}><RefreshCw size={15} className={requestsLoading || collaboratorsLoading ? 'access-spin' : ''}/>{requestsLoading || collaboratorsLoading ? 'Actualisation…' : 'Actualiser'}</button>
+            </div>
+            <div className="access-metrics">
+              <article className="access-metric"><span className="access-metric-icon"><Bell size={17}/></span><div><small>Demandes en attente</small><strong>{adminRequests.length}</strong></div><span className="access-metric-dot access-dot-amber"/></article>
+              {!isSuperAdmin && <article className="access-metric"><span className="access-metric-icon"><Users size={17}/></span><div><small>Collaborateurs actifs</small><strong>{projectCollaborators.length}</strong></div><span className="access-metric-dot access-dot-green"/></article>}
+            </div>
+          </section>
+
+          <section className="access-panel">
+            <div className="access-section-heading"><div><span className="access-section-index">01</span><div><h3>{isSuperAdmin ? 'Demandes propriétaire' : 'Demandes de collaboration'}</h3><p>{isSuperAdmin ? 'Examinez les demandes de création d’espace.' : 'Chaque demande doit être approuvée avant de donner accès à vos données.'}</p></div></div><span className="access-count">{adminRequests.length} en attente</span></div>
+            {requestsLoading ? <div className="access-skeleton-list" aria-label="Chargement des demandes"><div className="access-skeleton-row"/><div className="access-skeleton-row"/><div className="access-skeleton-row"/></div>
+              : adminRequests.length === 0 ? <div className="access-empty"><span className="access-empty-icon"><CheckCircle2 size={22}/></span><strong>Aucune demande en attente</strong><p>Vous êtes à jour. Les nouvelles demandes apparaîtront ici.</p></div>
+              : <div className="access-request-list">{adminRequests.map((request) => {
+                const personName = `${String(request.firstName ?? '')} ${String(request.lastName ?? '')}`.trim() || 'Utilisateur sans nom';
+                const created = typeof request.createdAt === 'string' && !Number.isNaN(Date.parse(request.createdAt)) ? new Date(request.createdAt).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}) : 'Date inconnue';
+                return <article className="access-request-card" key={String(request.uid)}>
+                  <span className="access-person-avatar">{initials(personName)}</span>
+                  <div className="access-person-info"><strong>{personName}</strong><div className="access-request-meta"><span className="access-status access-status-pending"><i/>En attente</span><span>{isSuperAdmin ? 'Compte propriétaire' : 'Collaborateur'}</span></div><small>{String(request.email || request.whatsapp || (request.projectId ? `Espace · ${request.projectId}` : 'Coordonnées non renseignées'))} · {created}</small></div>
+                  <div className="access-request-actions"><button type="button" className="access-approve" disabled={requestActionUid !== null} onClick={() => void decideAdminRequest(String(request.uid),'approved')}>{requestActionUid === request.uid ? <LoaderCircle size={15} className="access-spin"/> : <Check size={15}/>}Approuver</button><button type="button" className="access-reject" disabled={requestActionUid !== null} onClick={() => void decideAdminRequest(String(request.uid),'rejected')}>{requestActionUid === request.uid ? <LoaderCircle size={15} className="access-spin"/> : <X size={15}/>}Refuser</button></div>
+                </article>;
+              })}</div>}
+          </section>
+
+          {!isSuperAdmin && <section className="access-panel">
+            <div className="access-section-heading"><div><span className="access-section-index">02</span><div><h3>Collaborateurs et autorisations</h3><p>Gérez précisément les menus accessibles à chaque membre de votre espace.</p></div></div><span className="access-count">{projectCollaborators.length} membre{projectCollaborators.length > 1 ? 's' : ''}</span></div>
+            {collaboratorsLoading ? <div className="access-skeleton-list" aria-label="Chargement des collaborateurs"><div className="access-skeleton-row"/><div className="access-skeleton-row"/></div>
+              : projectCollaborators.length === 0 ? <div className="access-empty"><span className="access-empty-icon"><Users size={22}/></span><strong>Aucun collaborateur actif</strong><p>Après approbation d’une demande, le collaborateur apparaîtra ici pour que vous puissiez gérer ses accès.</p></div>
+              : <div className="access-collaborator-list">{projectCollaborators.map((person) => {
+                const personName = `${String(person.firstName ?? '')} ${String(person.lastName ?? '')}`.trim() || 'Collaborateur';
+                const permissions = Array.isArray(person.permissions) ? person.permissions as string[] : defaultCollaboratorMenus;
+                return <article className="access-collaborator-card" key={String(person.uid)}>
+                  <span className="access-person-avatar">{initials(personName)}</span>
+                  <div className="access-person-info"><strong>{personName}</strong><div className="access-request-meta"><span className="access-status access-status-active"><i/>Actif</span><span className="access-menu-count">{permissions.length} sur {navItems.length} menus</span></div></div>
+                  <button type="button" className="access-manage-button" onClick={() => openPermissions(person)}><Settings size={15}/>Gérer les accès<ChevronRight size={15}/></button>
+                </article>;
+              })}</div>}
+          </section>}
+          <div className="access-security-note"><LockKeyhole size={17}/><p><strong>Accès protégés par Firestore</strong><span>Les permissions sont appliquées côté base de données. Un collaborateur ne peut accéder qu’à son propre espace.</span></p></div>
+        </div>
+      </>}}
     </>
   );
 
@@ -878,7 +915,16 @@ export default function App() {
       {tableModal && <Modal title="Créer une table" description="Définissez un nom clair pour retrouver facilement les invités." onClose={() => setTableModal(false)}><form onSubmit={saveTable} className="form-stack"><label>Nom ou numéro de table<input autoFocus value={newTableName} onChange={(event) => setNewTableName(event.target.value)} placeholder="Ex. Table 03" required /></label><label>Description <span className="optional-label">Facultatif</span><input value={newTableDescription} onChange={(event) => setNewTableDescription(event.target.value)} placeholder="Ex. Famille et proches" /></label><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setTableModal(false)}>Annuler</button><button type="submit" className="button button-primary"><Plus size={16} /> Créer la table</button></div></form></Modal>}
       {guestModal && <Modal title={editingGuest ? 'Modifier l’invité' : 'Ajouter un invité'} description={activeTable ? `Table sélectionnée : ${activeTable.name}` : 'L’invité doit être affecté à une table existante.'} onClose={() => setGuestModal(false)}><form onSubmit={saveGuest} className="form-stack"><label>Nom de l’invité ou des invités<input autoFocus value={guestName} onChange={(event) => setGuestName(event.target.value)} placeholder={kind === 'couple' ? 'Jean et Marie Mukendi' : 'Jean Mukendi'} required /></label><label>Type d’invitation<select value={kind} onChange={(event) => setKind(event.target.value as InvitationKind)}><option value="individual">Personne seule</option><option value="couple">Couple</option></select></label>{kind === 'individual' && <label>Civilité<select value={salutation} onChange={(event) => setSalutation(event.target.value as Salutation)}><option>Monsieur</option><option>Madame</option><option>Mademoiselle</option></select></label>}<div className="name-preview"><span>APERÇU DU NOM</span><strong>{guestName.trim() ? makeDisplayName(guestName, salutation, kind) : 'Le nom apparaîtra ici'}</strong></div><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setGuestModal(false)}>Annuler</button><button type="submit" className="button button-primary"><Check size={16} /> {editingGuest ? 'Enregistrer' : 'Ajouter l’invité'}</button></div></form></Modal>}
       {detailGuest && <Modal title="Détail de l’invitation" description="Fiche invité, QR unique et invitation personnalisée." onClose={() => setDetailGuest(null)} wide><div className="detail-layout"><div className="detail-invite-preview" style={{ position: 'relative', overflow: 'hidden', padding: 0, background: templateImage ? 'transparent' : undefined, aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4', width: '100%', containerType: 'inline-size' }}>{templateImage ? <><img src={templateImage} alt="Template original de l’invitation" style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }} /><strong className="template-preview-name" style={{ position: 'absolute', left: `${templateNameX}%`, top: `${templateNameY}%`, transform: 'translate(-50%, -50%)', fontSize: `${(fitNameFontSize(detailGuest.displayName, templateImageDimensions?.width ?? 1000) / (templateImageDimensions?.width ?? 1000)) * 100}cqw`, maxWidth: `${templateNameWidth}%`, overflowWrap: 'anywhere', wordBreak: 'break-word', color: templateNameColor, fontFamily: templateNameFont, textShadow: templateNameEffect === 'shadow' ? '0 1px 3px #ffffffcc' : templateNameEffect === 'glow' ? `0 0 8px ${templateNameColor}` : 'none', WebkitTextStroke: templateNameEffect === 'outline' ? '0.6px white' : '0px transparent' }}>{detailGuest.displayName}</strong>{detailGuest.token && <div className="template-preview-qr" style={{ position: 'absolute', left: `${templateQrX}%`, top: `${templateQrY}%`, width: `${templateQrSize}%`, transform: 'translate(-50%, -50%)' }}><QRCodeSVG value={detailGuest.token} size={256} level="H" includeMargin /></div>}</> : <div className="template-preview-empty"><FileImage size={28} /><strong>Aucun template importé</strong></div>}</div><div className="detail-meta"><div className="detail-meta-row"><span>Table</span><strong>{tables.find((table) => table.id === detailGuest.tableId)?.name ?? 'Table inconnue'}</strong></div><div className="detail-meta-row"><span>Type</span><strong>{detailGuest.kind === 'couple' ? 'Couple' : 'Personne seule'}</strong></div><div className="detail-meta-row"><span>Invitation</span><strong>{statusLabel(detailGuest.invitationStatus)}</strong></div><div className="detail-meta-row"><span>Entrée</span><strong>{statusLabel(detailGuest.checkinStatus)}</strong></div><div className="detail-meta-row"><span>Identifiant</span><code>{detailGuest.id}</code></div><div className="detail-actions">{detailGuest.invitationStatus !== 'generated' && <button className="button button-primary button-wide" onClick={() => generateInvitation(detailGuest.id)}><QrCode size={16} /> Générer le QR code</button>}{detailGuest.token && <button className="button button-secondary button-wide" onClick={() => void downloadDemoInvitation(detailGuest)}><Download size={16} /> Télécharger l’invitation (PNG)</button>}<button className="button button-secondary button-wide" onClick={() => { setDetailGuest(null); openAddGuest(detailGuest); }}><Pencil size={15} /> Modifier la fiche</button><button className="button button-danger-ghost button-wide" onClick={() => deleteGuest(detailGuest)}><Trash2 size={15} /> Supprimer l’invité</button><p className="muted-copy small-note">Le PNG téléchargé reprend le template et les positions enregistrées dans cet éditeur.</p></div></div></div></Modal>}
-      {permissionsModal && <div className="permission-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPermissionsModal(null); }}><section className="permission-modal" role="dialog" aria-modal="true" aria-labelledby="permissions-modal-title"><div className="permission-modal-head"><span className="permission-modal-icon"><ShieldCheck size={22}/></span><div><h2 id="permissions-modal-title">Autorisations du collaborateur</h2><p>{String(permissionsModal.firstName ?? '')} {String(permissionsModal.lastName ?? '')} · Choisissez les menus visibles.</p></div><button className="permission-close" aria-label="Fermer" onClick={() => setPermissionsModal(null)}><X size={18}/></button></div><div className="permission-modal-toolbar"><span><strong>{permissionDraft.length}</strong> / {navItems.length} menus sélectionnés</span><div><button type="button" onClick={() => setPermissionDraft(navItems.map((item) => item.id))}>Tout sélectionner</button><button type="button" onClick={() => setPermissionDraft([])}>Tout désélectionner</button></div></div><div className="permission-modal-body">{navItems.map((item) => <label className="permission-option" key={item.id}><span className="permission-option-icon"><item.icon size={18}/></span><span className="permission-option-copy"><strong>{item.label}</strong><small>Autoriser l’accès à ce menu</small></span><input type="checkbox" checked={permissionDraft.includes(item.id)} onChange={(event) => setPermissionDraft((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))}/></label>)}</div><div className="permission-modal-footer"><span>{permissionDraft.length} menu(x) sélectionné(s)</span><div><button className="button button-secondary" onClick={() => setPermissionsModal(null)}>Annuler</button><button className="button button-primary" disabled={permissionsSaving} onClick={() => void saveCollaboratorPermissions()}>{permissionsSaving ? 'Enregistrement…' : 'Enregistrer les droits'}</button></div></div></section></div>}
+      {permissionsModal && createPortal(<div className="permission-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !permissionsSaving) setPermissionsModal(null); }}><section className="permission-modal" role="dialog" aria-modal="true" aria-labelledby="permissions-modal-title">
+        <div className="permission-modal-head"><span className="permission-modal-icon"><ShieldCheck size={21}/></span><div><span className="access-eyebrow">GESTION DES AUTORISATIONS</span><h2 id="permissions-modal-title">{String(permissionsModal.firstName ?? '')} {String(permissionsModal.lastName ?? '')}</h2><p>Choisissez les fonctionnalités accessibles à ce collaborateur.</p></div><button className="permission-close" aria-label="Fermer" disabled={permissionsSaving} onClick={() => setPermissionsModal(null)}><X size={18}/></button></div>
+        <div className="permission-modal-toolbar"><span><strong>{permissionDraft.length}</strong> / {navItems.length} menus autorisés</span><div><button type="button" onClick={() => setPermissionDraft(navItems.map((item) => item.id))}>Tout sélectionner</button><button type="button" onClick={() => setPermissionDraft([])}>Tout désélectionner</button></div></div>
+        <div className="permission-modal-body">{navItems.map((item) => {
+          const descriptions: Record<string,string> = {dashboard:'Vue d’ensemble et indicateurs',tables:'Organisation des places et des tables',guests:'Liste et fiches des invités',invitations:'Création des invitations personnalisées',scanner:'Contrôle des QR codes à l’entrée',history:'Journal des entrées et des contrôles',templates:'Modèles et mise en page',settings:'Préférences de l’espace'};
+          const checked = permissionDraft.includes(item.id);
+          return <button type="button" className={`permission-option ${checked ? 'permission-option-active' : ''}`} key={item.id} aria-pressed={checked} onClick={() => setPermissionDraft((current) => checked ? current.filter((id) => id !== item.id) : [...current,item.id])}><span className="permission-option-icon"><item.icon size={17}/></span><span className="permission-option-copy"><strong>{item.label}</strong><small>{descriptions[item.id] ?? 'Accès à cette fonctionnalité'}</small></span><span className={`permission-toggle ${checked ? 'permission-toggle-on' : ''}`} aria-hidden="true"><i/></span></button>;
+        })}</div>
+        <div className="permission-modal-footer"><span>{permissionDraft.length} menu{permissionDraft.length > 1 ? 'x' : ''} activé{permissionDraft.length > 1 ? 's' : ''}</span><div><button type="button" className="button button-secondary" disabled={permissionsSaving} onClick={() => setPermissionsModal(null)}>Annuler</button><button type="button" className="button button-primary" disabled={permissionsSaving} onClick={() => void saveCollaboratorPermissions()}>{permissionsSaving ? <><LoaderCircle size={15} className="access-spin"/>Enregistrement…</> : <><Check size={15}/>Enregistrer les droits</>}</button></div></div>
+      </section></div>, document.body)}
       {toast && <div className={`toast toast-${toast.kind}`}><span>{toast.kind === 'success' ? <CheckCircle2 size={18} /> : toast.kind === 'error' ? <AlertTriangle size={18} /> : <CircleHelp size={18} />}</span>{toast.message}<button aria-label="Fermer" onClick={() => setToast(null)}><X size={15} /></button></div>}
     </div>
   );
