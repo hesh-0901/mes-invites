@@ -132,23 +132,23 @@ export default function App() {
   const [guestName, setGuestName] = useState('');
   const [salutation, setSalutation] = useState<Salutation>('Monsieur');
   const [kind, setKind] = useState<InvitationKind>('individual');
-  const [templateImage, setTemplateImage] = useState<string>(() => {
-    try { return window.localStorage.getItem('mes-invites-template-image') ?? ''; } catch { return ''; }
-  });
-  const [templateNameX, setTemplateNameX] = useState(() => Number(window.localStorage.getItem('mes-invites-template-name-x') ?? 50));
-  const [templateNameY, setTemplateNameY] = useState(() => Number(window.localStorage.getItem('mes-invites-template-name-y') ?? 55));
-  const [templateQrX, setTemplateQrX] = useState(() => Number(window.localStorage.getItem('mes-invites-template-qr-x') ?? 78));
-  const [templateQrY, setTemplateQrY] = useState(() => Number(window.localStorage.getItem('mes-invites-template-qr-y') ?? 82));
-  const [templateQrSize, setTemplateQrSize] = useState(() => Number(window.localStorage.getItem('mes-invites-template-qr-size') ?? 14));
-  const [templateNameSize, setTemplateNameSize] = useState(() => Number(window.localStorage.getItem('mes-invites-template-name-size') ?? 3));
-  const [templateNameWidth, setTemplateNameWidth] = useState(() => Number(window.localStorage.getItem('mes-invites-template-name-width') ?? 60));
-  const [templateNameColor, setTemplateNameColor] = useState(() => window.localStorage.getItem('mes-invites-template-name-color') ?? '#762d40');
-  const [templateNameFont, setTemplateNameFont] = useState(() => window.localStorage.getItem('mes-invites-template-name-font') ?? 'Georgia');
-  const [templateNameEffect, setTemplateNameEffect] = useState(() => window.localStorage.getItem('mes-invites-template-name-effect') ?? 'shadow');
+  // La configuration partagée vient de Firestore, jamais du cache local d'un autre projet.
+  const [templateImage, setTemplateImage] = useState<string>('');
+  const [templateNameX, setTemplateNameX] = useState(50);
+  const [templateNameY, setTemplateNameY] = useState(55);
+  const [templateQrX, setTemplateQrX] = useState(78);
+  const [templateQrY, setTemplateQrY] = useState(82);
+  const [templateQrSize, setTemplateQrSize] = useState(14);
+  const [templateNameSize, setTemplateNameSize] = useState(3);
+  const [templateNameWidth, setTemplateNameWidth] = useState(60);
+  const [templateNameColor, setTemplateNameColor] = useState('#762d40');
+  const [templateNameFont, setTemplateNameFont] = useState('Georgia');
+  const [templateNameEffect, setTemplateNameEffect] = useState('shadow');
   const [templateImageDimensions, setTemplateImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const [templateSampleName, setTemplateSampleName] = useState('Nom de l’invité');
-  const [templateLocked, setTemplateLocked] = useState(() => window.localStorage.getItem('mes-invites-template-locked') === 'true');
+  const [templateLocked, setTemplateLocked] = useState(false);
   const [templateSettingsReady, setTemplateSettingsReady] = useState(false);
+  const [templateSettingsProjectId, setTemplateSettingsProjectId] = useState<string | null>(null);
   const [draggingTemplateElement, setDraggingTemplateElement] = useState<'name' | 'qr' | null>(null);
   const templatePreviewRef = useRef<HTMLDivElement | null>(null);
 
@@ -186,6 +186,8 @@ export default function App() {
   }, [page]);
   useEffect(() => {
     if (!firebaseConfigured || !authUser || accessState !== 'approved' || !projectId || !firestore) return;
+    setTemplateSettingsReady(false);
+    setTemplateSettingsProjectId(null);
     const canReadTables = currentProfile?.role !== 'collaborator' || allowedMenus.includes('tables');
     const canReadGuests = currentProfile?.role !== 'collaborator' || allowedMenus.includes('guests') || allowedMenus.includes('invitations');
     const canReadCheckins = currentProfile?.role !== 'collaborator' || allowedMenus.includes('scanner') || allowedMenus.includes('history');
@@ -210,7 +212,7 @@ export default function App() {
           qrSize?: number; nameSize?: number; nameWidth?: number; nameColor?: string;
           nameFont?: string; nameEffect?: string; locked?: boolean;
         } | undefined;
-        if (!templateSettings) { setTemplateSettingsReady(true); return; }
+        if (!templateSettings) { setTemplateSettingsReady(true); setTemplateSettingsProjectId(projectId); return; }
         if (typeof templateSettings.imageUrl === 'string' && templateSettings.imageUrl !== templateImage) {
           setTemplateImage(templateSettings.imageUrl);
           try { window.localStorage.setItem('mes-invites-template-image', templateSettings.imageUrl); } catch { /* Optional cache. */ }
@@ -227,19 +229,22 @@ export default function App() {
         if (typeof templateSettings.nameEffect === 'string') setTemplateNameEffect(templateSettings.nameEffect);
         if (typeof templateSettings.locked === 'boolean') setTemplateLocked(templateSettings.locked);
         setTemplateSettingsReady(true);
+        setTemplateSettingsProjectId(projectId);
       }, (error) => {
         console.error('Synchronisation des paramètres du modèle impossible', error);
-        setTemplateSettingsReady(true);
+        setTemplateSettingsReady(false);
+        setTemplateSettingsProjectId(null);
         notify('Impossible de synchroniser les paramètres du modèle.', 'error');
       }));
     } else {
       setTemplateSettingsReady(false);
+      setTemplateSettingsProjectId(null);
     }
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, [authUser, accessState, projectId, currentProfile, allowedMenus.join('|')]);
 
   useEffect(() => {
-    if (!firebaseConfigured || !firestore || !projectId || accessState !== 'approved' || !templateSettingsReady) return;
+    if (!firebaseConfigured || !firestore || !projectId || accessState !== 'approved' || !templateSettingsReady || templateSettingsProjectId !== projectId) return;
     const timeout = window.setTimeout(() => {
       void setDoc(doc(firestore, 'projects', projectId, FIRESTORE_COLLECTIONS.settings, 'template'), {
         id: 'template', imageUrl: templateImage, nameX: templateNameX, nameY: templateNameY,
@@ -253,7 +258,7 @@ export default function App() {
       });
     }, 350);
     return () => window.clearTimeout(timeout);
-  }, [projectId, accessState, templateSettingsReady, templateImage, templateNameX, templateNameY, templateQrX, templateQrY, templateQrSize, templateNameSize, templateNameWidth, templateNameColor, templateNameFont, templateNameEffect, templateLocked, authUser?.uid]);
+  }, [projectId, accessState, templateSettingsReady, templateSettingsProjectId, templateImage, templateNameX, templateNameY, templateQrX, templateQrY, templateQrSize, templateNameSize, templateNameWidth, templateNameColor, templateNameFont, templateNameEffect, templateLocked, authUser?.uid]);
 
   useEffect(() => {
     if (!toast) return;
