@@ -68,7 +68,7 @@ service cloud.firestore {
           && (
             (collectionName == 'tables' && collaboratorHasMenu('tables'))
             || (collectionName == 'guests'
-              && (collaboratorHasMenu('guests') || collaboratorHasMenu('invitations')))
+              && (collaboratorHasMenu('guests') || collaboratorHasMenu('invitations') || collaboratorHasMenu('scanner')))
             || (collectionName == 'checkins'
               && (collaboratorHasMenu('scanner') || collaboratorHasMenu('history')))
             // Les paramètres communs sont lisibles par tout collaborateur approuvé,
@@ -87,7 +87,7 @@ service cloud.firestore {
           && (
             (collectionName == 'tables' && collaboratorHasMenu('tables'))
             || (collectionName == 'guests'
-              && (collaboratorHasMenu('guests') || collaboratorHasMenu('invitations')))
+              && (collaboratorHasMenu('guests') || collaboratorHasMenu('invitations') || collaboratorHasMenu('scanner')))
             || (collectionName == 'checkins'
               && (collaboratorHasMenu('scanner') || collaboratorHasMenu('history')))
             || (collectionName == 'eventSettings'
@@ -246,16 +246,20 @@ service cloud.firestore {
     match /projects/{projectId}/{collectionName}/{documentId} {
       allow read: if canReadProjectCollection(projectId, collectionName);
       allow create: if canWriteProjectCollection(projectId, collectionName)
+        && (collectionName != 'guests' || userProfile().role != 'collaborator' || collaboratorHasMenu('guests') || collaboratorHasMenu('invitations'))
         && (collectionName != 'guests' || request.resource.data.checkinStatus != 'checked-in')
         && (collectionName != 'checkins'
           || request.resource.data.result != 'accepted'
           || validAcceptedCheckinCreate(projectId, documentId));
       allow update: if canWriteProjectCollection(projectId, collectionName)
+        && (collectionName != 'guests' || userProfile().role != 'collaborator' || collaboratorHasMenu('guests') || collaboratorHasMenu('invitations')
+          || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checkinStatus', 'checkedInAt', 'lastCheckinId']))
         && (collectionName != 'guests'
           || !request.resource.data.diff(resource.data).affectedKeys()
             .hasAny(['checkinStatus', 'checkedInAt', 'lastCheckinId'])
           || validGuestCheckinUpdate(projectId, documentId));
-      allow delete: if canWriteProjectCollection(projectId, collectionName);
+      allow delete: if canWriteProjectCollection(projectId, collectionName)
+        && (collectionName != 'guests' || userProfile().role != 'collaborator' || collaboratorHasMenu('guests') || collaboratorHasMenu('invitations'));
     }
 
     // Legacy unscoped collections remain blocked until project-scoped migration.
