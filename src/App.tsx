@@ -552,7 +552,16 @@ export default function App() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `mes-invites-${guest.id}.png`;
+      const fileGuestName = guest.name
+        .normalize('NFD')
+        .replace(/[\\u0300-\\u036f]/g, '')
+        .trim()
+        .replace(/[^a-zA-Z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+      const invitationFileName = guest.kind === 'couple'
+        ? `Couple_${fileGuestName}_Inv.png`
+        : `${fileGuestName}_Inv.png`;
+      link.download = invitationFileName;
       link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
