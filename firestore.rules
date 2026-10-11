@@ -232,7 +232,8 @@ service cloud.firestore {
     }
 
     function validGuestCheckinUpdate(projectId, guestId) {
-      return request.resource.data.diff(resource.data).affectedKeys()
+      return resource.data.checkinStatus != 'checked-in'
+        && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['checkinStatus', 'checkedInAt', 'lastCheckinId'])
         && request.resource.data.checkinStatus == 'checked-in'
         && request.resource.data.checkedInAt is string
