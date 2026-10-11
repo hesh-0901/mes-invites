@@ -13,7 +13,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { auth, firebaseConfigured, firestore } from './firebase';
 import { createUserWithEmailAndPassword, deleteUser, onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, where, setDoc, updateDoc } from 'firebase/firestore';
-import { deleteRecord, FIRESTORE_COLLECTIONS, loadCollection, saveCheckinRecord, saveGuestRecord, saveRecord, saveTableRecord } from './firestoreData';
+import { deleteRecord, FIRESTORE_COLLECTIONS, saveCheckinRecord, saveGuestRecord, saveRecord, saveTableRecord } from './firestoreData';
 import type { Checkin, Guest, GuestTable, InvitationKind, Salutation } from './types';
 
 type Page = 'dashboard' | 'tables' | 'guests' | 'invitations' | 'templates' | 'scanner' | 'history' | 'settings';
