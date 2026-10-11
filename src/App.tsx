@@ -12,7 +12,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { Html5Qrcode } from 'html5-qrcode';
 import { auth, firebaseConfigured, firestore } from './firebase';
 import { createUserWithEmailAndPassword, deleteUser, onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, onSnapshot, query, where, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, where, setDoc, updateDoc } from 'firebase/firestore';
 import { deleteRecord, FIRESTORE_COLLECTIONS, saveCheckinRecord, saveGuestRecord, saveRecord, saveTableRecord } from './firestoreData';
 import type { Checkin, Guest, GuestTable, InvitationKind, Salutation } from './types';
 
@@ -860,14 +860,13 @@ export default function App() {
     if (!window.confirm('Retirer ' + name + ' de votre projet ? Il perdra immédiatement l’accès à cet espace.')) return;
     setRemovingCollaboratorUid(uid);
     try {
-      await updateDoc(doc(firestore, 'users', uid), {
-        status: 'rejected',
-        removedAt: new Date().toISOString(),
-        removedBy: authUser?.uid ?? null,
-      });
+      // Supprime le profil d’accès Firestore du collaborateur dans cet espace.
+      // Le compte Firebase Authentication reste conservé : le client ne peut pas
+      // supprimer de façon sécurisée un autre utilisateur Auth.
+      await deleteDoc(doc(firestore, 'users', uid));
       setProjectCollaborators((items) => items.filter((entry) => entry.uid !== uid));
       if (String(permissionsModal?.uid ?? '') === uid) setPermissionsModal(null);
-      notify('Collaborateur retiré du projet.');
+      notify('Profil du collaborateur supprimé. Son compte ne peut plus accéder à cet espace.');
     } catch {
       notify('Impossible de retirer ce collaborateur. Vérifie les règles Firestore publiées.', 'error');
     } finally { setRemovingCollaboratorUid(null); }
