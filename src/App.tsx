@@ -1000,10 +1000,6 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    if (settingsTab === 'access' && isSuperAdmin) void loadResetProjects();
-  }, [settingsTab, isSuperAdmin]);
-
   const resetSelectedProjectData = async () => {
     if (!firestore || !isSuperAdmin || resettingProjects || !resetProjectId) {
       if (!resetProjectId) notify('Sélectionne d’abord le projet à réinitialiser.', 'error');
@@ -1197,6 +1193,10 @@ export default function App() {
   };
 
   const [settingsTab, setSettingsTab] = useState<'general' | 'event' | 'template' | 'access'>('general');
+
+  useEffect(() => {
+    if (settingsTab === 'access' && isSuperAdmin) void loadResetProjects();
+  }, [settingsTab, isSuperAdmin]);
   const [showProjectKey, setShowProjectKey] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<(Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }> }) | null>(null);
   const [pwaInstalled, setPwaInstalled] = useState(false);
