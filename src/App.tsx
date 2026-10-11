@@ -115,6 +115,8 @@ export default function App() {
   const defaultCollaboratorMenus = ['dashboard', 'tables', 'guests', 'invitations', 'scanner', 'history'];
   const allowedMenus = Array.isArray(currentProfile?.permissions) ? currentProfile.permissions as string[] : defaultCollaboratorMenus;
   const [page, setPage] = useState<Page>('dashboard');
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [manualCodeOpen, setManualCodeOpen] = useState(false);
   useEffect(() => {
     if (currentProfile?.role !== 'collaborator' || allowedMenus.length === 0) return;
     if (!allowedMenus.includes(page)) setPage(allowedMenus[0] as Page);
@@ -493,26 +495,47 @@ export default function App() {
 
   const startCamera = async () => {
     try {
-      const scanner = new Html5Qrcode('qr-reader');
+      const scanner = scannerRef.current ?? new Html5Qrcode('qr-reader');
       scannerRef.current = scanner;
-      await scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 240, height: 240 } }, (decoded) => {
-        void scanner.stop().catch(() => undefined);
-        setCameraActive(false);
-        validateScan(decoded);
-      }, () => undefined);
+      if (scanner.isScanning) return;
+      await scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: (viewfinderWidth, viewfinderHeight) => {
+          const size = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.72);
+          return { width: Math.max(180, size), height: Math.max(180, size) };
+        }, aspectRatio: 1 },
+        (decoded) => {
+          void scanner.stop().catch(() => undefined);
+          setCameraActive(false);
+          void validateScan(decoded);
+        },
+        () => undefined,
+      );
       setCameraActive(true);
-    } catch {
-      notify('Caméra indisponible. Autorise l’accès ou utilise la saisie manuelle.', 'error');
+    } catch (error) {
+      console.error('Impossible de démarrer la caméra du scanner', error);
+      notify('Caméra indisponible. Autorise son accès dans le navigateur ou utilise « Insérer code ».', 'error');
     }
   };
   const stopCamera = async () => {
     try { if (scannerRef.current?.isScanning) await scannerRef.current.stop(); } catch { /* Scanner may already have stopped. */ }
     setCameraActive(false);
   };
+  useEffect(() => {
+    if (scannerOpen && !scanResult) void startCamera();
+    else void stopCamera();
+  }, [scannerOpen, scanResult]);
   useEffect(() => () => {
     const scanner = scannerRef.current;
     if (scanner?.isScanning) void scanner.stop().catch(() => undefined);
   }, []);
+
+  const reopenScannerCamera = () => {
+    setScanResult(null);
+    setScanValue('');
+    setManualCodeOpen(false);
+  };
+
 
   const deleteGuest = (guest: Guest) => {
     setDeleteConfirmation({ type: 'guest', item: guest, stage: 1 });
@@ -847,9 +870,42 @@ export default function App() {
 
   const renderScanner = () => (
     <>
-      <section className="welcome-row"><div><div className="eyebrow">ACCUEIL & CONTRÔLE</div><h2>Scanner une invitation</h2><p>Vérifiez une invitation avant de valider l’entrée.</p></div><span className="demo-tag"><span /> Contrôle des entrées</span></section>
-      <section className="scanner-layout"><div className="panel scanner-panel"><div className="panel-heading"><div><h3>Lecteur QR</h3><p>Utilisez une caméra compatible ou saisissez un code.</p></div><ScanLine size={20} className="muted-icon" /></div><div className="scanner-frame"><div id="qr-reader" className="qr-reader" />{!cameraActive && <div className="scanner-placeholder"><span className="scanner-corners"><ScanLine size={43} /></span><strong>Placez le QR code dans le cadre</strong><small>La caméra peut nécessiter une autorisation du navigateur.</small></div>}</div><div className="scanner-controls">{cameraActive ? <button className="button button-secondary button-wide" onClick={() => void stopCamera()}>Arrêter la caméra</button> : <button className="button button-primary button-wide" onClick={() => void startCamera()}><Camera size={17} /> Activer la caméra</button>}<div className="manual-scan"><label htmlFor="scan-code">Ou saisir le code QR ou l’identifiant de l’invité</label><div><input id="scan-code" value={scanValue} onChange={(event) => setScanValue(event.target.value)} placeholder="Code QR ou identifiant invité" /><button className="button button-secondary" onClick={() => validateScan(scanValue)}>Vérifier</button></div></div><p className="muted-copy small-note"><LockKeyhole size={14} /> La validation est enregistrée atomiquement dans Firestore. Un QR déjà utilisé est refusé.</p></div></div>
-        <div className="panel scan-result-panel"><div className="panel-heading"><div><h3>Résultat du contrôle</h3><p>Les informations apparaissent après la lecture.</p></div><ShieldCheck size={20} className="muted-icon" /></div>{!scanResult ? <div className="empty-state scan-empty"><QrCode size={30} /><strong>En attente d’un scan</strong><span>Scannez une invitation ou saisissez un code connu.</span></div> : <div className={`scan-result scan-result-${scanResult.state}`}><span className="scan-result-icon">{scanResult.state === 'valid' ? <CheckCircle2 size={25} /> : scanResult.state === 'used' ? <AlertTriangle size={25} /> : <X size={25} />}</span><strong>{scanResult.state === 'valid' ? 'Invitation valide' : scanResult.state === 'used' ? 'Entrée déjà enregistrée' : 'Invitation invalide'}</strong><p>{scanResult.message}</p>{scanResult.guest && <div className="scan-guest-card"><span className="avatar avatar-large">{initials(scanResult.guest.displayName)}</span><div><strong>{scanResult.guest.displayName}</strong><small>{tables.find((table) => table.id === scanResult.guest?.tableId)?.name ?? 'Table inconnue'}</small><small>{statusLabel(scanResult.guest.checkinStatus)}</small></div></div>}</div>}<div className="scanner-rules"><div><CheckCircle2 size={16} /><span>Vérification de l’identifiant</span></div><div><ShieldCheck size={16} /><span>Prévention des doubles entrées par transaction Firestore</span></div></div></div></section>
+      <section className="welcome-row"><div><div className="eyebrow">ACCUEIL & CONTRÔLE</div><h2>Scanner une invitation</h2><p>Ouvrez le lecteur en plein écran pour contrôler une entrée.</p></div></section>
+      <section className="panel scanner-launch-panel">
+        <span className="scanner-launch-icon"><ScanLine size={32} /></span>
+        <h3>Prêt pour le contrôle des entrées ?</h3>
+        <p>Le lecteur s’ouvre en plein écran. Après chaque scan, vous pourrez fermer le résultat pour revenir directement à la caméra.</p>
+        <button className="button button-primary scanner-launch-button" onClick={() => { setScanResult(null); setManualCodeOpen(false); setScannerOpen(true); }}><Camera size={17} /> Ouvrir le scanner</button>
+      </section>
+      {scannerOpen && createPortal(
+        <div className="scanner-fullscreen" role="dialog" aria-modal="true" aria-label="Scanner les invitations">
+          <header className="scanner-fullscreen-header">
+            <div className="scanner-fullscreen-brand"><span><QrCode size={21} /></span><div><strong>Mes Invites</strong><small>Contrôle des entrées</small></div></div>
+            <button className="scanner-exit-button" aria-label="Quitter le scanner" onClick={() => { setScannerOpen(false); setScanResult(null); setManualCodeOpen(false); }}><X size={23} /></button>
+          </header>
+          <main className="scanner-fullscreen-main">
+            {!scanResult ? <>
+              <div className="scanner-fullscreen-instructions"><span className="scanner-live-dot" /> <strong>Placez le QR code dans le cadre</strong><p>Le contrôle se lance automatiquement dès que le QR est reconnu.</p></div>
+              <div className="scanner-fullscreen-viewfinder"><div id="qr-reader" className="qr-reader" /><div className="scanner-viewfinder-overlay" aria-hidden="true"><span className="scanner-corner scanner-corner-tl" /><span className="scanner-corner scanner-corner-tr" /><span className="scanner-corner scanner-corner-bl" /><span className="scanner-corner scanner-corner-br" /></div>{!cameraActive && <div className="scanner-camera-loading"><LoaderCircle size={28} /><span>Activation de la caméra…</span></div>}</div>
+              <div className="scanner-fullscreen-bottom">
+                <span className="scanner-secure-note"><LockKeyhole size={14} /> Validation sécurisée</span>
+                <button className="scanner-manual-toggle" onClick={() => setManualCodeOpen((open) => !open)}><Pencil size={15} /> Insérer code</button>
+                {manualCodeOpen && <form className="scanner-manual-form" onSubmit={(event) => { event.preventDefault(); void validateScan(scanValue); }}><input autoFocus value={scanValue} onChange={(event) => setScanValue(event.target.value)} placeholder="Coller ou saisir le code" aria-label="Code de l’invitation" /><button type="submit" disabled={!scanValue.trim()}>Vérifier</button></form>}
+              </div>
+            </> : <section className={`scanner-result-screen scanner-result-screen-${scanResult.state}`}>
+              <button className="scanner-result-close" aria-label="Retour au scanner" onClick={reopenScannerCamera}><X size={24} /></button>
+              <div className="scanner-result-emblem">{scanResult.state === 'valid' ? <CheckCircle2 size={43} /> : scanResult.state === 'used' ? <AlertTriangle size={43} /> : <X size={43} />}</div>
+              <span className="scanner-result-eyebrow">{scanResult.state === 'valid' ? 'ACCÈS AUTORISÉ' : scanResult.state === 'used' ? 'ENTRÉE DÉJÀ EFFECTUÉE' : 'ACCÈS REFUSÉ'}</span>
+              <h2>{scanResult.state === 'valid' ? 'Invitation validée' : scanResult.state === 'used' ? 'Invitation déjà utilisée' : 'Invitation invalide'}</h2>
+              <p className="scanner-result-message">{scanResult.message}</p>
+              {scanResult.guest && <div className="scanner-result-guest"><span className="scanner-result-avatar">{initials(scanResult.guest.displayName)}</span><div><strong>{scanResult.guest.displayName}</strong><span>{tables.find((table) => table.id === scanResult.guest?.tableId)?.name ?? 'Table inconnue'}</span><small>{scanResult.guest.kind === 'couple' ? 'Invitation couple · 2 personnes validées ensemble' : 'Invitation individuelle'}</small></div><span className="scanner-result-check"><CheckCircle2 size={21} /></span></div>}
+              <button className="scanner-return-button" onClick={reopenScannerCamera}><ScanLine size={18} /> Reprendre le scan</button>
+            </section>}
+          </main>
+          <footer className="scanner-fullscreen-footer">Mes Invites <span>•</span> Contrôle des invitations</footer>
+        </div>,
+        document.body,
+      )}
     </>
   );
 
