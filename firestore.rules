@@ -35,7 +35,10 @@ service cloud.firestore {
     }
 
     function isApprovedProjectMember(projectId) {
-      return signedIn() && hasProfile()
+      // Les comptes collaborateurs utilisent un identifiant de connexion interne
+      // qui peut ne pas être marqué comme e-mail vérifié par Firebase Auth.
+      // Le profil approuvé et lié au projet reste le contrôle d'accès principal.
+      return request.auth != null && hasProfile()
         && userProfile().status == 'approved'
         && userProfile().projectId == projectId
         && activeProject(projectId)
@@ -68,7 +71,7 @@ service cloud.firestore {
               && (collaboratorHasMenu('guests') || collaboratorHasMenu('invitations')))
             || (collectionName == 'checkins'
               && (collaboratorHasMenu('scanner') || collaboratorHasMenu('history')))
-            || (collectionName == 'eventSettings' && collaboratorHasMenu('settings'))
+            || (collectionName == 'eventSettings' && (collaboratorHasMenu('settings') || collaboratorHasMenu('templates')))
             || (collectionName == 'templates' && collaboratorHasMenu('templates'))
           )
         );
