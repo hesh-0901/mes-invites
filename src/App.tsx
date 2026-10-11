@@ -794,7 +794,7 @@ export default function App() {
   const renderGuests = () => (
     <>
       <section className="welcome-row"><div><div className="eyebrow">RÉPERTOIRE</div><h2>Tous les invités</h2><p>Chaque invité doit être rattaché à une table existante.</p></div><button className="button button-primary" onClick={() => { notify('Sélectionne une table avant d’ajouter un invité.', 'info'); navigate('tables'); }}><Plus size={17} /> Ajouter un invité</button></section>
-      <section className="panel data-panel"><div className="panel-heading"><div><h3>Liste des invités <span className="data-count">{visibleGuestRows.length}</span></h3></div></div>{renderGuestTable(visibleGuestRows)}</section>
+      <section className="panel data-panel"><div className="panel-heading"><div><h3>Liste des invités <span className="data-count">{visibleGuestRows.length}</span></h3></div><div className="search-box"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher un invité" /></div></div>{renderGuestTable(visibleGuestRows)}</section>
     </>
   );
 
@@ -964,7 +964,7 @@ export default function App() {
   const renderHistory = () => (
     <>
       <section className="welcome-row"><div><div className="eyebrow">TRAÇABILITÉ</div><h2>Historique des entrées</h2><p>Consultez les contrôles effectués pendant l’accueil.</p></div><button className="button button-secondary" onClick={() => notify('L’export sera activé avec les données persistées.', 'info')}><Download size={16} /> Exporter</button></section>
-      <section className="panel data-panel"><div className="panel-heading"><div><h3>Journal des contrôles <span className="data-count">{visibleHistoryRows.length}</span></h3></div></div><div className="table-wrap"><table><thead><tr>
+      <section className="panel data-panel"><div className="panel-heading"><div><h3>Journal des contrôles <span className="data-count">{visibleHistoryRows.length}</span></h3></div><div className="search-box"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Rechercher dans l’historique" /></div></div><div className="table-wrap"><table><thead><tr>
           <th><div className="filter-heading"><span>Invité</span><input className="column-filter-input" aria-label="Filtrer l’historique par invité" value={historyNameFilter} onChange={(event) => setHistoryNameFilter(event.target.value)} placeholder="⌕" /></div></th>
           <th><div className="filter-heading"><span>Table</span><select className="column-filter-select" aria-label="Filtrer l’historique par table" value={historyTableFilter} onChange={(event) => setHistoryTableFilter(event.target.value)}><option value="all">Toutes</option>{Array.from(new Set(checkins.map((entry) => entry.tableName))).filter(Boolean).map((name) => <option key={name} value={name}>{name}</option>)}</select></div></th>
           <th><div className="filter-heading"><span>Date et heure</span></div></th>
