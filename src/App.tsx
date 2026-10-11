@@ -530,9 +530,18 @@ export default function App() {
     if (scanner?.isScanning) void scanner.stop().catch(() => undefined);
   }, []);
 
-  const reopenScannerCamera = () => {
+  const reopenScannerCamera = async () => {
+    await stopCamera();
+    scannerRef.current = null;
     setScanResult(null);
     setScanValue('');
+    setManualCodeOpen(false);
+  };
+  const closeFullscreenScanner = async () => {
+    await stopCamera();
+    scannerRef.current = null;
+    setScannerOpen(false);
+    setScanResult(null);
     setManualCodeOpen(false);
   };
 
@@ -881,7 +890,7 @@ export default function App() {
         <div className="scanner-fullscreen" role="dialog" aria-modal="true" aria-label="Scanner les invitations">
           <header className="scanner-fullscreen-header">
             <div className="scanner-fullscreen-brand"><span><QrCode size={21} /></span><div><strong>Mes Invites</strong><small>Contrôle des entrées</small></div></div>
-            <button className="scanner-exit-button" aria-label="Quitter le scanner" onClick={() => { setScannerOpen(false); setScanResult(null); setManualCodeOpen(false); }}><X size={23} /></button>
+            <button className="scanner-exit-button" aria-label="Quitter le scanner" onClick={() => void closeFullscreenScanner()}><X size={23} /></button>
           </header>
           <main className="scanner-fullscreen-main">
             {!scanResult ? <>
