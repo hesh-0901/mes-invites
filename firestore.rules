@@ -189,7 +189,13 @@ service cloud.firestore {
           ))
       );
 
-      allow delete: if isSuperAdmin();
+      allow delete: if isSuperAdmin()
+        || (
+          signedIn()
+          && resource.data.role == 'collaborator'
+          && resource.data.projectId is string
+          && isProjectAdmin(resource.data.projectId)
+        );
     }
 
     match /projects/{projectId}/{collectionName}/{documentId} {
