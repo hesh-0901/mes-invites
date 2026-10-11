@@ -427,13 +427,17 @@ export default function App() {
       return;
     }
 
-    const cachedGuest = guestsRef.current.find((item) => item.token === code || item.id === code);
+    const matchingGuests = guestsRef.current.filter((item) => item.token === code || item.id === code || guestShortNumber(item) === code);
+    // Le numéro numérique imprimé sur l’invitation est un identifiant court affiché,
+    // distinct du token embarqué dans le QR. Refuser les collisions plutôt que
+    // valider accidentellement l’invité d’une autre invitation.
+    const cachedGuest = matchingGuests.length === 1 ? matchingGuests[0] : undefined;
     const timestamp = new Date().toISOString();
     const entryId = makeId('checkin');
 
     if (!cachedGuest) {
       const entry: Checkin = { id: entryId, guestId: '', guestName: 'Invitation inconnue', tableName: '—', result: 'invalid', timestamp, operator: authUser.displayName || authUser.email || 'Accueil' };
-      setScanResult({ state: 'invalid', message: 'Invitation inconnue ou code QR non reconnu.' });
+      setScanResult({ state: 'invalid', message: matchingGuests.length > 1 ? 'Ce numéro d’invitation est ambigu. Utilise le QR code complet pour éviter une erreur.' : 'Invitation inconnue ou code QR non reconnu.' });
       try {
         await saveCheckinRecord(projectId, entry);
         setCheckins((current) => [entry, ...current]);
@@ -457,7 +461,7 @@ export default function App() {
           timestamp, operator: authUser.displayName || authUser.email || 'Accueil',
         };
 
-        if (guest.token !== code && guest.id !== code) {
+        if (guest.token !== code && guest.id !== code && guestShortNumber(guest) !== code) {
           transaction.set(checkinRef, entry);
           return { state: 'invalid' as const, guest, entry, message: 'Le code ne correspond plus à cette invitation.' };
         }
