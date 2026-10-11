@@ -723,7 +723,7 @@ export default function App() {
     <div className="table-wrap">
       <table>
         <thead><tr>
-          <th className="number-column">N°</th><th><div className="filter-heading"><span>Invité</span><input className="column-filter-input" aria-label="Filtrer les invités par nom" value={guestNameFilter} onChange={(event) => setGuestNameFilter(event.target.value)} placeholder="⌕" /></div></th>
+          <th className="number-column">N°</th><th><div className="filter-heading"><span>Invité</span></div></th>
           <th><div className="filter-heading"><span>Table</span><select className="column-filter-select" aria-label="Filtrer par table" value={guestTableFilter} onChange={(event) => setGuestTableFilter(event.target.value)}><option value="all">Toutes</option>{tables.map((table) => <option key={table.id} value={table.id}>{table.name}</option>)}</select></div></th>
           <th><div className="filter-heading"><span>Type</span><select className="column-filter-select" aria-label="Filtrer par type" value={guestKindFilter} onChange={(event) => setGuestKindFilter(event.target.value)}><option value="all">Tous</option><option value="individual">Individuelle</option><option value="couple">Couple</option></select></div></th>
           <th><div className="filter-heading"><span>Invitation</span><select className="column-filter-select" aria-label="Filtrer par statut d’invitation" value={guestInvitationFilter} onChange={(event) => setGuestInvitationFilter(event.target.value)}><option value="all">Tous</option><option value="not-generated">Non générée</option><option value="generated">Générée</option><option value="disabled">Désactivée</option></select></div></th>
