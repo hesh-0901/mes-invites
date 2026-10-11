@@ -139,6 +139,9 @@ export default function App() {
   const [historyNameFilter, setHistoryNameFilter] = useState('');
   const [historyOperatorFilter, setHistoryOperatorFilter] = useState('all');
   const [resettingProjects, setResettingProjects] = useState(false);
+  const [resetProjects, setResetProjects] = useState<Array<{ id: string; ownerUid?: string; ownerName?: string; name?: string; status?: string }>>([]);
+  const [resetProjectId, setResetProjectId] = useState('');
+  const [resetProjectsLoading, setResetProjectsLoading] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [tableModal, setTableModal] = useState(false);
   const [editingTable, setEditingTable] = useState<GuestTable | null>(null);
@@ -972,42 +975,81 @@ export default function App() {
     </>
   );
 
-  const resetAllProjectData = async () => {
-    if (!firestore || !isSuperAdmin || resettingProjects) return;
-    const confirmation = window.prompt('Cette opération supprimera les tables, invités, historiques et paramètres de TOUS les projets. Les comptes utilisateurs et les documents projets seront conservés. Tape RESET pour confirmer.');
+  const loadResetProjects = async () => {
+    if (!firestore || !isSuperAdmin || resetProjectsLoading) return;
+    setResetProjectsLoading(true);
+    try {
+      const snapshot = await getDocs(collection(firestore, 'projects'));
+      const projects = snapshot.docs.map((entry) => {
+        const data = entry.data();
+        return {
+          id: entry.id,
+          ownerUid: typeof data.ownerUid === 'string' ? data.ownerUid : undefined,
+          ownerName: typeof data.ownerName === 'string' ? data.ownerName : undefined,
+          name: typeof data.name === 'string' ? data.name : undefined,
+          status: typeof data.status === 'string' ? data.status : undefined,
+        };
+      });
+      setResetProjects(projects);
+      setResetProjectId((current) => projects.some((project) => project.id === current) ? current : '');
+    } catch (error) {
+      console.error('Chargement des projets pour réinitialisation impossible', error);
+      notify('Impossible de charger les projets enregistrés.', 'error');
+    } finally {
+      setResetProjectsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (settingsTab === 'access' && isSuperAdmin) void loadResetProjects();
+  }, [settingsTab, isSuperAdmin]);
+
+  const resetSelectedProjectData = async () => {
+    if (!firestore || !isSuperAdmin || resettingProjects || !resetProjectId) {
+      if (!resetProjectId) notify('Sélectionne d’abord le projet à réinitialiser.', 'error');
+      return;
+    }
+    const selectedProject = resetProjects.find((project) => project.id === resetProjectId);
+    if (!selectedProject) {
+      notify('Le projet sélectionné n’existe plus. Actualise la liste.', 'error');
+      return;
+    }
+    const projectLabel = selectedProject.name || selectedProject.ownerName || selectedProject.id;
+    const confirmation = window.prompt(`Cette opération supprimera les tables, invités, historiques et paramètres d’invitation du projet « ${projectLabel} » uniquement. Les comptes utilisateurs et le document du projet seront conservés. Tape RESET pour confirmer.`);
     if (confirmation !== 'RESET') {
       if (confirmation !== null) notify('Réinitialisation annulée : confirmation incorrecte.', 'info');
       return;
     }
     setResettingProjects(true);
     try {
-      const projectsSnapshot = await getDocs(collection(firestore, 'projects'));
       const subcollections = ['tables', 'guests', 'checkins', 'eventSettings', 'templates'];
       let deletedCount = 0;
-      for (const project of projectsSnapshot.docs) {
-        for (const subcollectionName of subcollections) {
-          const records = await getDocs(collection(firestore, 'projects', project.id, subcollectionName));
-          for (let offset = 0; offset < records.docs.length; offset += 400) {
-            const batch = writeBatch(firestore);
-            records.docs.slice(offset, offset + 400).forEach((record) => batch.delete(record.ref));
-            await batch.commit();
-            deletedCount += Math.min(400, records.docs.length - offset);
-          }
+      for (const subcollectionName of subcollections) {
+        const records = await getDocs(collection(firestore, 'projects', resetProjectId, subcollectionName));
+        for (let offset = 0; offset < records.docs.length; offset += 400) {
+          const batch = writeBatch(firestore);
+          records.docs.slice(offset, offset + 400).forEach((record) => batch.delete(record.ref));
+          await batch.commit();
+          deletedCount += Math.min(400, records.docs.length - offset);
         }
       }
-      setTables([]);
-      setGuests([]);
-      setCheckins([]);
-      setTemplateImage('');
-      setTemplateSettingsReady(false);
-      setTemplateSettingsProjectId(null);
+      if (projectId === resetProjectId) {
+        setTables([]);
+        setGuests([]);
+        setCheckins([]);
+        setTemplateImage('');
+        setTemplateSettingsReady(false);
+        setTemplateSettingsProjectId(null);
+      }
       try {
         window.localStorage.removeItem('mes-invites-template-image');
         window.localStorage.removeItem('mes-invites-template-locked');
       } catch { /* Le cache local est facultatif. */ }
-      notify(`Réinitialisation terminée : ${deletedCount} documents supprimés dans ${projectsSnapshot.size} projets. Les utilisateurs et les projets sont conservés.`, 'success');
+      notify(`Réinitialisation terminée pour « ${projectLabel} » : ${deletedCount} documents supprimés. Les utilisateurs et le projet sont conservés.`, 'success');
+      setResetProjectId('');
+      void loadResetProjects();
     } catch (error) {
-      console.error('Réinitialisation des projets impossible', error);
+      console.error('Réinitialisation du projet impossible', error);
       notify('Réinitialisation incomplète. Vérifie les règles Firestore et les droits super administrateur.', 'error');
     } finally {
       setResettingProjects(false);
@@ -1272,12 +1314,19 @@ export default function App() {
           </section>
 
           {isSuperAdmin && <section className="access-panel reset-projects-panel">
-            <div className="access-section-heading"><h4>Réinitialisation des projets</h4><span className="access-status access-status-pending"><i/>Action destructive</span></div>
-            <p>Supprime les tables, les invités, les historiques de contrôle et les paramètres d’invitation de tous les projets. Les comptes utilisateurs et les documents projets sont conservés.</p>
-            <button type="button" className="button button-danger-ghost" onClick={() => void resetAllProjectData()} disabled={resettingProjects}>
-              {resettingProjects ? <LoaderCircle size={16} className="access-spin"/> : <Trash2 size={16}/>}
-              {resettingProjects ? 'Réinitialisation en cours…' : 'Réinitialiser tous les projets'}
-            </button>
+            <div className="access-section-heading"><h4>Réinitialiser un projet</h4><span className="access-status access-status-pending"><i/>Action destructive</span></div>
+            <p>Sélectionne un seul projet. Ses tables, invités, historiques, paramètres et templates enregistrés seront supprimés. Les comptes utilisateurs et le document du projet resteront intacts.</p>
+            <div className="reset-project-controls">
+              <select aria-label="Projet à réinitialiser" value={resetProjectId} onChange={(event) => setResetProjectId(event.target.value)} disabled={resetProjectsLoading || resettingProjects}>
+                <option value="">{resetProjectsLoading ? 'Chargement des projets…' : 'Choisir un projet'}</option>
+                {resetProjects.map((project) => <option key={project.id} value={project.id}>{project.name || project.ownerName || 'Projet'} · {project.id}{project.status ? ` · ${project.status}` : ''}</option>)}
+              </select>
+              <button type="button" className="button button-danger-ghost" onClick={() => void resetSelectedProjectData()} disabled={resettingProjects || resetProjectsLoading || !resetProjectId}>
+                {resettingProjects ? <LoaderCircle size={16} className="access-spin"/> : <Trash2 size={16}/>}
+                {resettingProjects ? 'Réinitialisation en cours…' : 'Réinitialiser ce projet'}
+              </button>
+              <button type="button" className="button button-secondary" onClick={() => void loadResetProjects()} disabled={resettingProjects || resetProjectsLoading}><RefreshCw size={15} className={resetProjectsLoading ? 'access-spin' : ''}/> Actualiser</button>
+            </div>
           </section>}
 
           <section className="access-panel">
