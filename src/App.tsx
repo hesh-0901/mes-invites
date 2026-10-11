@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  Activity, ArrowDownRight, Bell, Check, CheckCircle2, ChevronDown, LoaderCircle, RefreshCw, LogOut, Filter,
+  Activity, ArrowDownRight, Bell, Check, CheckCircle2, ChevronDown, LoaderCircle, RefreshCw, LogOut,
   ChevronLeft, ChevronRight, CircleHelp, ClipboardList, Download, Eye,
   FileImage, Heart, LayoutDashboard, MoreHorizontal, Plus, QrCode,
   ScanLine, Search, Settings, ShieldCheck, Sparkles, Table2, Ticket, Users, X,
