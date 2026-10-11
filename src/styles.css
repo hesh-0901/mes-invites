@@ -897,3 +897,33 @@ tbody td>strong{font-weight:600;color:#453c41}
 .permission-modal-toolbar button:hover{background:#f8edf0}
 @media(max-width:760px){.access-overview{padding:19px}.access-overview-heading{align-items:flex-start}.access-overview-heading h3{font-size:20px}.access-metrics{grid-template-columns:1fr}.access-metric{padding:13px}.access-section{padding:16px!important}.access-section-heading{align-items:flex-start}.access-section-heading p{max-width:300px}.access-request-card,.access-collaborator-card{flex-wrap:wrap;gap:11px}.access-person-info{flex-basis:calc(100% - 60px)}.access-request-actions{width:100%;padding-left:54px}.access-request-actions .button{flex:1;justify-content:center}.access-permission-summary{margin-left:54px}.access-manage-button{margin-left:auto}.permission-modal-toolbar{align-items:flex-start;flex-direction:column;padding:12px 16px}.permission-modal-toolbar>div{width:100%}.permission-modal-toolbar button{flex:1}}
 @media(max-width:430px){.access-overview-heading{flex-direction:column}.access-overview-heading>.button{width:100%;justify-content:center}.access-section-heading{flex-direction:column}.access-count{align-self:flex-start}.access-request-actions{padding-left:0}.access-permission-summary{margin-left:0}.access-manage-button{width:100%;justify-content:center}.permission-modal-toolbar>div{flex-direction:column}}
+
+
+/* Premium role-specific authentication */
+.auth-screen{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:22px;background:rgba(28,19,23,.42);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.auth-backdrop-close{position:absolute;inset:0;width:100%;height:100%;border:0;background:transparent;cursor:default}
+.auth-dialog{position:relative;z-index:1;width:min(100%,460px);max-height:min(92dvh,820px);overflow:auto;padding:clamp(24px,4vw,36px);border:1px solid rgba(255,255,255,.8);border-radius:24px;background:linear-gradient(160deg,#fff 0%,#fffdfb 100%);box-shadow:0 32px 100px rgba(32,16,22,.24);animation:authDialogIn .22s ease-out}
+@keyframes authDialogIn{from{opacity:0;transform:translateY(9px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+.auth-dialog-close{position:absolute;right:18px;top:18px;display:grid;place-items:center;width:34px;height:34px;border:1px solid #eee6e5;border-radius:50%;background:#fff;color:#8a777d;cursor:pointer;transition:background .18s,color .18s}
+.auth-dialog-close:hover{background:#f7eff0;color:var(--wine)}
+.auth-dialog .auth-brand{font-size:19px}
+.auth-dialog .auth-mark{width:42px;height:42px;border-radius:13px}
+.auth-dialog .auth-intro{margin:26px 0 20px}
+.auth-dialog .auth-intro h1{font-size:clamp(27px,5vw,32px);letter-spacing:-.035em}
+.auth-dialog .auth-intro p{max-width:340px;font-size:12px}
+.auth-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;margin:0 0 22px;border:1px solid #f0e8e7;border-radius:12px;background:#f8f5f4}
+.auth-tabs button{min-height:39px;padding:9px 12px;border:0;border-radius:9px;background:transparent;color:#8d7e82;font-size:11px;font-weight:600;cursor:pointer;transition:background .18s,color .18s,box-shadow .18s}
+.auth-tabs button.active{background:#fff;color:var(--wine);box-shadow:0 2px 8px rgba(50,28,34,.08)}
+.auth-dialog .auth-form{gap:13px}
+.auth-dialog .auth-form label{gap:7px;font-size:11px;color:#62565b}
+.auth-dialog .auth-form input{height:46px;padding:0 13px;border-color:#eae2e0;border-radius:10px;background:#fff;font-size:13px;transition:border-color .18s,box-shadow .18s}
+.auth-dialog .auth-form input:focus{border-color:#bd929d;outline:0;box-shadow:0 0 0 4px rgba(118,45,64,.08)}
+.auth-dialog .auth-submit{min-height:47px;margin-top:3px;border-radius:11px;font-size:12px}
+.auth-dialog .auth-switch{margin-top:17px;font-size:11px}
+.auth-dialog .auth-footnote{margin-top:18px}
+.auth-role-switch{padding-top:13px;border-top:1px solid #f0e9e7}
+.landing-hero-actions .landing-role-button{min-height:47px;padding:13px 19px;gap:10px;border:1px solid #e9dfe0;background:rgba(255,255,255,.7);color:#65545a}
+.landing-hero-actions .landing-role-button:hover{border-color:#d5bcc1;background:#fff}
+.landing-cta-actions{display:flex;gap:10px;flex-wrap:wrap}
+.landing-cta-actions .button{min-height:44px}
+@media(max-width:520px){.auth-screen{padding:12px;align-items:center}.auth-dialog{padding:24px 19px;border-radius:20px;max-height:94dvh}.auth-dialog .auth-intro{margin:22px 0 17px}.auth-dialog-close{right:13px;top:13px}.landing-nav-actions{gap:8px}.landing-nav-actions .landing-login-link{font-size:10px}.landing-nav-cta{font-size:10px}.landing-hero-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.landing-hero-actions .button{justify-content:center}.landing-cta-actions{width:100%}.landing-cta-actions .button{flex:1;justify-content:center}}
