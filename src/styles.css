@@ -1259,3 +1259,9 @@ tbody td>strong{font-weight:600;color:#453c41}
     font-size: 16px !important;
   }
 }
+
+.profile-row{position:relative}
+.profile-actions-popover{position:absolute;right:0;bottom:calc(100% + 10px);z-index:80;min-width:220px;padding:6px;border:1px solid var(--border,#eadfe2);border-radius:14px;background:var(--surface,#fff);box-shadow:0 12px 34px rgba(40,20,28,.16);display:flex;flex-direction:column;gap:4px}
+.profile-actions-popover button{display:flex;align-items:center;gap:10px;width:100%;padding:11px 12px;border:0;border-radius:9px;background:transparent;color:var(--text,#34252a);font:inherit;text-align:left;cursor:pointer}
+.profile-actions-popover button:hover{background:var(--surface-muted,#f8f1f3)}
+.profile-actions-popover button svg{flex:0 0 auto;color:var(--primary,#762d40)}
