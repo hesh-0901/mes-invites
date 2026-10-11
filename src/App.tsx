@@ -12,7 +12,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { Html5Qrcode } from 'html5-qrcode';
 import { auth, firebaseConfigured, firestore } from './firebase';
 import { createUserWithEmailAndPassword, deleteUser, onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth';
-import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, where, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, where, setDoc, updateDoc, runTransaction } from 'firebase/firestore';
 import { deleteRecord, FIRESTORE_COLLECTIONS, saveCheckinRecord, saveGuestRecord, saveRecord, saveTableRecord } from './firestoreData';
 import type { Checkin, Guest, GuestTable, InvitationKind, Salutation } from './types';
 
@@ -412,39 +412,84 @@ export default function App() {
     setGuests((current) => current.map((item) => item.id === guestId ? updated : item));
     void saveGuestRecord(projectId!, updated).catch(() => undefined);
     setDetailGuest(updated);
-    notify('QR code unique généré. Tu peux télécharger l’invitation personnalisée.');
-  };
-
-  const validateScan = useCallback((raw: string) => {
+    notify('QR code unique généré. Tu peux télécharger l’invitation personna  const validateScan = useCallback(async (raw: string) => {
     const code = raw.trim();
     if (!code) return;
-    const guest = guestsRef.current.find((item) => item.token === code || item.id === code);
-    if (!guest || guest.invitationStatus !== 'generated') {
-      setScanResult({ state: 'invalid', message: 'Invitation inconnue, non générée ou désactivée.' });
-      setScanValue(code);
-      const entry: Checkin = { id: makeId('scan'), guestId: guest?.id ?? '', guestName: guest?.displayName ?? 'Invitation inconnue', tableName: tables.find((table) => table.id === guest?.tableId)?.name ?? '—', result: 'invalid', timestamp: new Date().toISOString(), operator: 'Accueil — démonstration' };
-      setCheckins((current) => [entry, ...current]);
-      void saveCheckinRecord(projectId!, entry).catch(() => undefined);
-      return;
-    }
     setScanValue(code);
-    if (guest.checkinStatus === 'checked-in') {
-      setScanResult({ state: 'used', guest, message: 'Cette invitation a déjà été utilisée.' });
-      const entry: Checkin = { id: makeId('scan'), guestId: guest.id, guestName: guest.displayName, tableName: tables.find((table) => table.id === guest.tableId)?.name ?? '—', result: 'already-used', timestamp: new Date().toISOString(), operator: 'Accueil — démonstration' };
-      setCheckins((current) => [entry, ...current]);
-      void saveCheckinRecord(projectId!, entry).catch(() => undefined);
+    if (!firestore || !projectId || !authUser || accessState !== 'approved') {
+      setScanResult({ state: 'invalid', message: 'Connecte-toi à un espace actif pour contrôler les invitations.' });
+      notify('Scanner indisponible : espace non connecté.', 'error');
       return;
     }
+
+    const cachedGuest = guestsRef.current.find((item) => item.token === code || item.id === code);
     const timestamp = new Date().toISOString();
-    setGuests((current) => current.map((item) => item.id === guest.id ? { ...item, checkinStatus: 'checked-in', checkedInAt: timestamp } : item));
-    const tableName = tables.find((table) => table.id === guest.tableId)?.name ?? '—';
-    const entry: Checkin = { id: makeId('checkin'), guestId: guest.id, guestName: guest.displayName, tableName, result: 'accepted', timestamp, operator: 'Accueil — démonstration' };
-    setCheckins((current) => [entry, ...current]);
-    void saveCheckinRecord(projectId!, entry).catch(() => undefined);
-    void saveGuestRecord(projectId!, { ...guest, checkinStatus: 'checked-in', checkedInAt: timestamp }).catch(() => undefined);
-    setScanResult({ state: 'valid', guest: { ...guest, checkinStatus: 'checked-in', checkedInAt: timestamp }, message: 'Entrée enregistrée en mode démonstration.' });
-    notify('Entrée enregistrée dans les données de démonstration.', 'success');
-  }, [tables]);
+    const entryId = makeId('checkin');
+    const tableName = tables.find((table) => table.id === cachedGuest?.tableId)?.name ?? '—';
+
+    if (!cachedGuest) {
+      const entry: Checkin = { id: entryId, guestId: '', guestName: 'Invitation inconnue', tableName: '—', result: 'invalid', timestamp, operator: authUser.displayName || authUser.email || 'Accueil' };
+      setScanResult({ state: 'invalid', message: 'Invitation inconnue ou code QR non reconnu.' });
+      try {
+        await saveCheckinRecord(projectId, entry);
+        setCheckins((current) => [entry, ...current]);
+      } catch {
+        notify('Invitation inconnue. Impossible d’enregistrer le contrôle dans l’historique.', 'error');
+      }
+      return;
+    }
+
+    const guestRef = doc(firestore, 'projects', projectId, FIRESTORE_COLLECTIONS.guests, cachedGuest.id);
+    const checkinRef = doc(firestore, 'projects', projectId, FIRESTORE_COLLECTIONS.checkins, entryId);
+    try {
+      const result = await runTransaction(firestore, async (transaction) => {
+        const guestSnapshot = await transaction.get(guestRef);
+        if (!guestSnapshot.exists()) return { state: 'invalid' as const, message: 'Cet invité n’existe plus dans cet espace.' };
+        const guest = { ...guestSnapshot.data(), id: guestSnapshot.id } as Guest;
+        const table = tables.find((item) => item.id === guest.tableId);
+        const entry: Checkin = {
+          id: entryId, guestId: guest.id, guestName: guest.displayName,
+          tableName: table?.name ?? 'Table inconnue', result: 'invalid',
+          timestamp, operator: authUser.displayName || authUser.email || 'Accueil',
+        };
+
+        if (guest.token !== code && guest.id !== code) {
+          transaction.set(checkinRef, entry);
+          return { state: 'invalid' as const, guest, entry, message: 'Le code ne correspond plus à cette invitation.' };
+        }
+        if (guest.invitationStatus !== 'generated') {
+          transaction.set(checkinRef, entry);
+          return { state: 'invalid' as const, guest, entry, message: 'Invitation non générée ou désactivée.' };
+        }
+        if (guest.checkinStatus === 'checked-in') {
+          transaction.set(checkinRef, { ...entry, result: 'already-used' });
+          return { state: 'used' as const, guest, entry: { ...entry, result: 'already-used' as const }, message: 'Cette invitation a déjà été utilisée.' };
+        }
+
+        const acceptedEntry: Checkin = { ...entry, result: 'accepted' };
+        transaction.update(guestRef, { checkinStatus: 'checked-in', checkedInAt: timestamp, lastCheckinId: entryId });
+        transaction.set(checkinRef, acceptedEntry);
+        return { state: 'valid' as const, guest: { ...guest, checkinStatus: 'checked-in' as const, checkedInAt: timestamp }, entry: acceptedEntry, message: guest.kind === 'couple' ? 'Entrée du couple enregistrée : les deux personnes sont validées.' : 'Entrée enregistrée.' };
+      });
+
+      if (result.entry) setCheckins((current) => [result.entry!, ...current]);
+      if (result.guest) {
+        setGuests((current) => current.map((item) => item.id === result.guest!.id ? result.guest! : item));
+      }
+      if (result.state === 'valid') {
+        setScanResult({ state: 'valid', guest: result.guest, message: result.message });
+        notify(result.message, 'success');
+      } else if (result.state === 'used') {
+        setScanResult({ state: 'used', guest: result.guest, message: result.message });
+      } else {
+        setScanResult({ state: 'invalid', guest: result.guest, message: result.message });
+      }
+    } catch (error) {
+      console.error('Validation transactionnelle du scan impossible', error);
+      setScanResult({ state: 'invalid', message: 'Le contrôle n’a pas pu être enregistré. Vérifie la connexion et les règles Firestore, puis réessaie.' });
+      notify('Échec de validation sécurisée. Aucune entrée n’a été confirmée.', 'error');
+    }
+  }, [tables, projectId, authUser, accessState]);
 
   const startCamera = async () => {
     try {
