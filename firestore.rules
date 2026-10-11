@@ -157,13 +157,36 @@ service cloud.firestore {
           && resource.data.status == 'approved'
           && isProjectAdmin(resource.data.projectId)
           && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['permissions', 'permissionsUpdatedAt', 'permissionsUpdatedBy'])
-          && request.resource.data.permissions is list
-          && request.resource.data.permissions.size() <= 8
-          && request.resource.data.permissions.toSet().hasOnly([
-            'dashboard', 'tables', 'guests', 'invitations',
-            'scanner', 'history', 'templates', 'settings'
-          ]))
+            .hasOnly([
+              'permissions', 'permissionsUpdatedAt', 'permissionsUpdatedBy',
+              'displayName', 'whatsapp', 'profileUpdatedAt', 'profileUpdatedBy',
+              'status', 'removedAt', 'removedBy'
+            ])
+          && (
+            (
+              request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['permissions', 'permissionsUpdatedAt', 'permissionsUpdatedBy'])
+              && request.resource.data.permissions is list
+              && request.resource.data.permissions.size() <= 8
+              && request.resource.data.permissions.toSet().hasOnly([
+                'dashboard', 'tables', 'guests', 'invitations',
+                'scanner', 'history', 'templates', 'settings'
+              ])
+            )
+            || (
+              request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['displayName', 'whatsapp', 'profileUpdatedAt', 'profileUpdatedBy'])
+              && request.resource.data.displayName is string
+              && request.resource.data.displayName.size() > 0
+              && request.resource.data.profileUpdatedBy == request.auth.uid
+            )
+            || (
+              request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['status', 'removedAt', 'removedBy'])
+              && request.resource.data.status == 'rejected'
+              && request.resource.data.removedBy == request.auth.uid
+            )
+          ))
       );
 
       allow delete: if isSuperAdmin();
