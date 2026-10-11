@@ -964,8 +964,20 @@ export default function App() {
     </>
   );
 
+  const canResetHistoryEntry = (entry: Checkin) => {
+    if (isSuperAdmin) return true;
+    if (currentProfile?.role === 'admin' && projectId) return true;
+    const operatorNames = [
+      authUser?.displayName,
+      authUser?.email,
+      [currentProfile?.firstName, currentProfile?.lastName].filter((part) => typeof part === 'string' && part.trim()).join(' '),
+    ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+    const normalizeOperator = (value: string) => value.trim().replace(/\\s+/g, ' ').toLocaleLowerCase('fr');
+    return operatorNames.some((name) => normalizeOperator(name) === normalizeOperator(entry.operator));
+  };
+
   const resetHistoryEntry = async (entry: Checkin) => {
-    if (!firestore || !projectId || resettingCheckinId) return;
+    if (!firestore || !projectId || resettingCheckinId || !canResetHistoryEntry(entry)) return;
     const confirmed = window.confirm(`Réinitialiser cette entrée pour « ${entry.guestName} » ? L’enregistrement sera retiré de l’historique et, si cette entrée avait validé l’accès, l’invitation sera de nouveau marquée comme non utilisée.`);
     if (!confirmed) return;
     setResettingCheckinId(entry.id);
@@ -997,7 +1009,7 @@ export default function App() {
           <th><div className="filter-heading"><span>Table</span><select className={`column-filter-select icon-only-filter ${historyTableFilter !== 'all' ? 'filter-active' : ''}`} aria-label="Filtrer l’historique par table" value={historyTableFilter} onChange={(event) => setHistoryTableFilter(event.target.value)}><option value="all">Toutes</option>{Array.from(new Set(checkins.map((entry) => entry.tableName))).filter(Boolean).map((name) => <option key={name} value={name}>{name}</option>)}</select></div></th>
           <th><div className="filter-heading"><span>Date et heure</span></div></th>
           <th><div className="filter-heading"><span>Résultat</span><select className={`column-filter-select icon-only-filter ${historyResultFilter !== 'all' ? 'filter-active' : ''}`} aria-label="Filtrer l’historique par résultat" value={historyResultFilter} onChange={(event) => setHistoryResultFilter(event.target.value)}><option value="all">Tous</option><option value="accepted">Acceptée</option><option value="already-used">Déjà utilisée</option><option value="invalid">Invalide</option></select></div></th>
-          <th><div className="filter-heading"><span>Opérateur</span><select className={`column-filter-select icon-only-filter ${historyOperatorFilter !== 'all' ? 'filter-active' : ''}`} aria-label="Filtrer par opérateur" value={historyOperatorFilter} onChange={(event) => setHistoryOperatorFilter(event.target.value)}><option value="all">Tous</option>{Array.from(new Set(checkins.map((entry) => entry.operator))).filter(Boolean).map((name) => <option key={name} value={name}>{name}</option>)}</select></div></th><th>Action</th></tr></thead><tbody>{visibleHistoryRows.map((entry, index) => <tr key={entry.id}><td className="row-number">{index + 1}.</td><td><strong>{entry.guestName}</strong></td><td>{entry.tableName}</td><td>{formatDate(entry.timestamp)}</td><td><span className={`status-pill ${entry.result === 'accepted' ? 'status-green' : entry.result === 'invalid' ? 'status-red' : 'status-amber'}`}><span className="status-dot" />{entry.result === 'accepted' ? 'Entrée acceptée' : entry.result === 'already-used' ? 'Déjà utilisée' : 'Invalide'}</span></td><td>{entry.operator}</td><td><button type="button" className="button button-danger-ghost history-reset-button" disabled={resettingCheckinId !== null} onClick={() => void resetHistoryEntry(entry)}>{resettingCheckinId === entry.id ? <LoaderCircle size={14} className="access-spin"/> : <RefreshCw size={14}/>} Réinitialiser</button></td></tr>)}</tbody></table>{checkins.length === 0 && <div className="empty-state"><ClipboardList size={28} /><strong>Aucune entrée</strong><span>Les scans apparaîtront ici.</span></div>}</div></section>
+          <th><div className="filter-heading"><span>Opérateur</span><select className={`column-filter-select icon-only-filter ${historyOperatorFilter !== 'all' ? 'filter-active' : ''}`} aria-label="Filtrer par opérateur" value={historyOperatorFilter} onChange={(event) => setHistoryOperatorFilter(event.target.value)}><option value="all">Tous</option>{Array.from(new Set(checkins.map((entry) => entry.operator))).filter(Boolean).map((name) => <option key={name} value={name}>{name}</option>)}</select></div></th><th>Action</th></tr></thead><tbody>{visibleHistoryRows.map((entry, index) => <tr key={entry.id}><td className="row-number">{index + 1}.</td><td><strong>{entry.guestName}</strong></td><td>{entry.tableName}</td><td>{formatDate(entry.timestamp)}</td><td><span className={`status-pill ${entry.result === 'accepted' ? 'status-green' : entry.result === 'invalid' ? 'status-red' : 'status-amber'}`}><span className="status-dot" />{entry.result === 'accepted' ? 'Entrée acceptée' : entry.result === 'already-used' ? 'Déjà utilisée' : 'Invalide'}</span></td><td>{entry.operator}</td><td>{canResetHistoryEntry(entry) && <button type="button" className="icon-button history-reset-button" title="Réinitialiser cette entrée" aria-label={`Réinitialiser l’entrée de ${entry.guestName}`} disabled={resettingCheckinId !== null} onClick={() => void resetHistoryEntry(entry)}>{resettingCheckinId === entry.id ? <LoaderCircle size={14} className="access-spin"/> : <RefreshCw size={14}/>}</button>}</td></tr>)}</tbody></table>{checkins.length === 0 && <div className="empty-state"><ClipboardList size={28} /><strong>Aucune entrée</strong><span>Les scans apparaîtront ici.</span></div>}</div></section>
     </>
   );
 
