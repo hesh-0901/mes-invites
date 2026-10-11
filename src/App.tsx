@@ -499,7 +499,8 @@ export default function App() {
       notify('Importe un template avant le téléchargement.', 'error');
       return;
     }
-    if (!guest.shortCode) {
+    const shortCode = guest.shortCode;
+    if (!shortCode) {
       const updated = { ...guest, shortCode: makeShortCode(guests) };
       setGuests((current) => current.map((item) => item.id === guest.id ? updated : item));
       void saveGuestRecord(projectId!, updated).catch(() => undefined);
@@ -546,7 +547,7 @@ export default function App() {
       }
       ctx.fillText(guest.displayName, width * templateNameX / 100, height * templateNameY / 100, width * templateNameWidth / 100);
       ctx.shadowBlur = 0;
-      const qrSvg = renderToStaticMarkup(<QRCodeSVG value={guest.shortCode} size={512} level="H" includeMargin />);
+      const qrSvg = renderToStaticMarkup(<QRCodeSVG value={shortCode} size={512} level="H" includeMargin />);
       // SVG images loaded by Image() need an explicit SVG namespace in some browsers.
       const compatibleQrSvg = qrSvg.includes('xmlns="http://www.w3.org/2000/svg"')
         ? qrSvg
@@ -582,7 +583,7 @@ export default function App() {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.font = `700 ${Math.max(14, width * 0.015)}px "Roboto Mono", "Courier New", monospace`;
-        ctx.fillText(guest.shortCode, blockX + blockWidth / 2, blockY + blockHeight * 0.19);
+        ctx.fillText(shortCode, blockX + blockWidth / 2, blockY + blockHeight * 0.19);
 
         const qrSize = Math.min(blockWidth * 0.72, blockHeight * 0.72);
         const qrX = blockX + (blockWidth - qrSize) / 2;
