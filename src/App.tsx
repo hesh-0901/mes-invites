@@ -414,7 +414,10 @@ export default function App() {
     setGuests((current) => current.map((item) => item.id === guestId ? updated : item));
     void saveGuestRecord(projectId!, updated).catch(() => undefined);
     setDetailGuest(updated);
-    notify('QR code unique généré. Tu peux télécharger l’invitation personna  const validateScan = useCallback(async (raw: string) => {
+    notify('QR code unique généré. Tu peux télécharger l’invitation personnalisée.');
+  };
+
+  const validateScan = useCallback(async (raw: string) => {
     const code = raw.trim();
     if (!code) return;
     setScanValue(code);
