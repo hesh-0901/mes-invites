@@ -64,6 +64,11 @@ export default function App() {
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [collaboratorsLoading, setCollaboratorsLoading] = useState(false);
   const [requestActionUid, setRequestActionUid] = useState<string | null>(null);
+  const [editingCollaborator, setEditingCollaborator] = useState<Record<string, unknown> | null>(null);
+  const [collaboratorDisplayName, setCollaboratorDisplayName] = useState('');
+  const [collaboratorWhatsapp, setCollaboratorWhatsapp] = useState('');
+  const [collaboratorSaving, setCollaboratorSaving] = useState(false);
+  const [removingCollaboratorUid, setRemovingCollaboratorUid] = useState<string | null>(null);
   useEffect(() => {
     if (!auth) { setAuthReady(true); return; }
     return onAuthStateChanged(auth, async (user) => {
@@ -782,6 +787,64 @@ export default function App() {
     } finally { setPermissionsSaving(false); }
   };
 
+  const openCollaboratorEditor = (collaborator: Record<string, unknown>) => {
+    setEditingCollaborator(collaborator);
+    setCollaboratorDisplayName(String(collaborator.displayName ?? [collaborator.firstName, collaborator.lastName].filter(Boolean).join(' ')));
+    setCollaboratorWhatsapp(String(collaborator.whatsapp ?? ''));
+  };
+
+  const saveCollaboratorProfile = async () => {
+    if (!firestore || !projectId || !editingCollaborator || currentProfile?.role !== 'admin') return;
+    const uid = String(editingCollaborator.uid ?? '');
+    const target = projectCollaborators.find((entry) => entry.uid === uid);
+    const displayName = collaboratorDisplayName.trim();
+    if (!target || target.projectId !== projectId || target.status !== 'approved' || !displayName) {
+      notify('Vérifie le nom et le collaborateur sélectionné.', 'error');
+      return;
+    }
+    setCollaboratorSaving(true);
+    try {
+      await updateDoc(doc(firestore, 'users', uid), {
+        displayName,
+        whatsapp: collaboratorWhatsapp.trim(),
+        profileUpdatedAt: new Date().toISOString(),
+        profileUpdatedBy: authUser?.uid ?? null,
+      });
+      setProjectCollaborators((items) => items.map((entry) => entry.uid === uid
+        ? { ...entry, displayName, whatsapp: collaboratorWhatsapp.trim() }
+        : entry));
+      setEditingCollaborator(null);
+      notify('Profil du collaborateur mis à jour.');
+    } catch {
+      notify('Impossible de modifier ce collaborateur. Vérifie les règles Firestore publiées.', 'error');
+    } finally { setCollaboratorSaving(false); }
+  };
+
+  const removeCollaborator = async (collaborator: Record<string, unknown>) => {
+    if (!firestore || !projectId || currentProfile?.role !== 'admin') return;
+    const uid = String(collaborator.uid ?? '');
+    const target = projectCollaborators.find((entry) => entry.uid === uid);
+    if (!uid || !target || target.projectId !== projectId || target.status !== 'approved') {
+      notify('Ce collaborateur ne peut pas être supprimé de cet espace.', 'error');
+      return;
+    }
+    const name = String(target.displayName ?? [target.firstName, target.lastName].filter(Boolean).join(' ') ?? 'ce collaborateur');
+    if (!window.confirm('Retirer ' + name + ' de votre projet ? Il perdra immédiatement l’accès à cet espace.')) return;
+    setRemovingCollaboratorUid(uid);
+    try {
+      await updateDoc(doc(firestore, 'users', uid), {
+        status: 'rejected',
+        removedAt: new Date().toISOString(),
+        removedBy: authUser?.uid ?? null,
+      });
+      setProjectCollaborators((items) => items.filter((entry) => entry.uid !== uid));
+      if (String(permissionsModal?.uid ?? '') === uid) setPermissionsModal(null);
+      notify('Collaborateur retiré du projet.');
+    } catch {
+      notify('Impossible de retirer ce collaborateur. Vérifie les règles Firestore publiées.', 'error');
+    } finally { setRemovingCollaboratorUid(null); }
+  };
+
   const decideAdminRequest = async (uid: string, status: 'approved' | 'rejected') => {
     if (!firestore || (!isSuperAdmin && currentProfile?.role !== 'admin')) return;
     setRequestActionUid(uid);
@@ -886,12 +949,12 @@ export default function App() {
             {collaboratorsLoading ? <div className="access-skeleton-list" aria-label="Chargement des collaborateurs"><div className="access-skeleton-row"/><div className="access-skeleton-row"/></div>
               : projectCollaborators.length === 0 ? <div className="access-empty"><span className="access-empty-icon"><Users size={22}/></span><strong>Aucun collaborateur actif</strong><p>Après approbation d’une demande, le collaborateur apparaîtra ici pour que vous puissiez gérer ses accès.</p></div>
               : <div className="access-collaborator-list">{projectCollaborators.map((person) => {
-                const personName = `${String(person.firstName ?? '')} ${String(person.lastName ?? '')}`.trim() || 'Collaborateur';
+                const personName = String(person.displayName ?? `${String(person.firstName ?? '')} ${String(person.lastName ?? '')}`.trim()) || 'Collaborateur';
                 const permissions = Array.isArray(person.permissions) ? person.permissions as string[] : defaultCollaboratorMenus;
                 return <article className="access-collaborator-card" key={String(person.uid)}>
                   <span className="access-person-avatar">{initials(personName)}</span>
                   <div className="access-person-info"><strong>{personName}</strong><div className="access-request-meta"><span className="access-status access-status-active"><i/>Actif</span><span className="access-menu-count">{permissions.length} sur {navItems.length} menus</span></div></div>
-                  <button type="button" className="access-manage-button" onClick={() => openPermissions(person)}><Settings size={15}/>Gérer les accès<ChevronRight size={15}/></button>
+                  <div className="access-collaborator-actions"><button type="button" className="access-edit-button" onClick={() => openCollaboratorEditor(person)}><Pencil size={15}/>Modifier</button><button type="button" className="access-manage-button" onClick={() => openPermissions(person)}><Settings size={15}/>Accès<ChevronRight size={15}/></button><button type="button" className="access-remove-button" disabled={removingCollaboratorUid === person.uid} onClick={() => void removeCollaborator(person)} aria-label={"Retirer " + personName} title="Retirer du projet">{removingCollaboratorUid === person.uid ? <LoaderCircle size={15} className="access-spin"/> : <Trash2 size={15}/>}</button></div>
                 </article>;
               })}</div>}
           </section>}
@@ -926,6 +989,14 @@ export default function App() {
       {tableModal && <Modal title="Créer une table" description="Définissez un nom clair pour retrouver facilement les invités." onClose={() => setTableModal(false)}><form onSubmit={saveTable} className="form-stack"><label>Nom ou numéro de table<input autoFocus value={newTableName} onChange={(event) => setNewTableName(event.target.value)} placeholder="Ex. Table 03" required /></label><label>Description <span className="optional-label">Facultatif</span><input value={newTableDescription} onChange={(event) => setNewTableDescription(event.target.value)} placeholder="Ex. Famille et proches" /></label><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setTableModal(false)}>Annuler</button><button type="submit" className="button button-primary"><Plus size={16} /> Créer la table</button></div></form></Modal>}
       {guestModal && <Modal title={editingGuest ? 'Modifier l’invité' : 'Ajouter un invité'} description={activeTable ? `Table sélectionnée : ${activeTable.name}` : 'L’invité doit être affecté à une table existante.'} onClose={() => setGuestModal(false)}><form onSubmit={saveGuest} className="form-stack"><label>Nom de l’invité ou des invités<input autoFocus value={guestName} onChange={(event) => setGuestName(event.target.value)} placeholder={kind === 'couple' ? 'Jean et Marie Mukendi' : 'Jean Mukendi'} required /></label><label>Type d’invitation<select value={kind} onChange={(event) => setKind(event.target.value as InvitationKind)}><option value="individual">Personne seule</option><option value="couple">Couple</option></select></label>{kind === 'individual' && <label>Civilité<select value={salutation} onChange={(event) => setSalutation(event.target.value as Salutation)}><option>Monsieur</option><option>Madame</option><option>Mademoiselle</option></select></label>}<div className="name-preview"><span>APERÇU DU NOM</span><strong>{guestName.trim() ? makeDisplayName(guestName, salutation, kind) : 'Le nom apparaîtra ici'}</strong></div><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setGuestModal(false)}>Annuler</button><button type="submit" className="button button-primary"><Check size={16} /> {editingGuest ? 'Enregistrer' : 'Ajouter l’invité'}</button></div></form></Modal>}
       {detailGuest && <Modal title="Détail de l’invitation" description="Fiche invité, QR unique et invitation personnalisée." onClose={() => setDetailGuest(null)} wide><div className="detail-layout"><div className="detail-invite-preview" style={{ position: 'relative', overflow: 'hidden', padding: 0, background: templateImage ? 'transparent' : undefined, aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4', width: '100%', containerType: 'inline-size' }}>{templateImage ? <><img src={templateImage} alt="Template original de l’invitation" style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }} /><strong className="template-preview-name" style={{ position: 'absolute', left: `${templateNameX}%`, top: `${templateNameY}%`, transform: 'translate(-50%, -50%)', fontSize: `${(fitNameFontSize(detailGuest.displayName, templateImageDimensions?.width ?? 1000) / (templateImageDimensions?.width ?? 1000)) * 100}cqw`, maxWidth: `${templateNameWidth}%`, overflowWrap: 'anywhere', wordBreak: 'break-word', color: templateNameColor, fontFamily: templateNameFont, textShadow: templateNameEffect === 'shadow' ? '0 1px 3px #ffffffcc' : templateNameEffect === 'glow' ? `0 0 8px ${templateNameColor}` : 'none', WebkitTextStroke: templateNameEffect === 'outline' ? '0.6px white' : '0px transparent' }}>{detailGuest.displayName}</strong>{detailGuest.token && <div className="template-preview-qr" style={{ position: 'absolute', left: `${templateQrX}%`, top: `${templateQrY}%`, width: `${templateQrSize}%`, transform: 'translate(-50%, -50%)' }}><QRCodeSVG value={detailGuest.token} size={256} level="H" includeMargin /></div>}</> : <div className="template-preview-empty"><FileImage size={28} /><strong>Aucun template importé</strong></div>}</div><div className="detail-meta"><div className="detail-meta-row"><span>Table</span><strong>{tables.find((table) => table.id === detailGuest.tableId)?.name ?? 'Table inconnue'}</strong></div><div className="detail-meta-row"><span>Type</span><strong>{detailGuest.kind === 'couple' ? 'Couple' : 'Personne seule'}</strong></div><div className="detail-meta-row"><span>Invitation</span><strong>{statusLabel(detailGuest.invitationStatus)}</strong></div><div className="detail-meta-row"><span>Entrée</span><strong>{statusLabel(detailGuest.checkinStatus)}</strong></div><div className="detail-meta-row"><span>Identifiant</span><code>{detailGuest.id}</code></div><div className="detail-actions">{detailGuest.invitationStatus !== 'generated' && <button className="button button-primary button-wide" onClick={() => generateInvitation(detailGuest.id)}><QrCode size={16} /> Générer le QR code</button>}{detailGuest.token && <button className="button button-secondary button-wide" onClick={() => void downloadDemoInvitation(detailGuest)}><Download size={16} /> Télécharger l’invitation (PNG)</button>}<button className="button button-secondary button-wide" onClick={() => { setDetailGuest(null); openAddGuest(detailGuest); }}><Pencil size={15} /> Modifier la fiche</button><button className="button button-danger-ghost button-wide" onClick={() => deleteGuest(detailGuest)}><Trash2 size={15} /> Supprimer l’invité</button><p className="muted-copy small-note">Le PNG téléchargé reprend le template et les positions enregistrées dans cet éditeur.</p></div></div></div></Modal>}
+      {editingCollaborator && <Modal title="Modifier le collaborateur" description="Modifiez son nom affiché et son numéro de contact. Son identifiant de connexion reste inchangé." onClose={() => { if (!collaboratorSaving) setEditingCollaborator(null); }}>
+        <form className="form-stack" onSubmit={(event) => { event.preventDefault(); void saveCollaboratorProfile(); }}>
+          <label>Nom affiché<input autoFocus value={collaboratorDisplayName} onChange={(event) => setCollaboratorDisplayName(event.target.value)} required maxLength={100}/></label>
+          <label>Numéro WhatsApp<input type="tel" value={collaboratorWhatsapp} onChange={(event) => setCollaboratorWhatsapp(event.target.value)} placeholder="+243…" maxLength={30}/></label>
+          <p className="muted-copy small-note">Le nom utilisé pour se connecter n’est pas modifié, afin de ne pas bloquer son accès.</p>
+          <div className="modal-actions"><button type="button" className="button button-secondary" disabled={collaboratorSaving} onClick={() => setEditingCollaborator(null)}>Annuler</button><button type="submit" className="button button-primary" disabled={collaboratorSaving}>{collaboratorSaving ? <><LoaderCircle size={15} className="access-spin"/>Enregistrement…</> : <><Check size={15}/>Enregistrer</>}</button></div>
+        </form>
+      </Modal>}
       {permissionsModal && createPortal(<div className="permission-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !permissionsSaving) setPermissionsModal(null); }}><section className="permission-modal" role="dialog" aria-modal="true" aria-labelledby="permissions-modal-title">
         <div className="permission-modal-head"><span className="permission-modal-icon"><ShieldCheck size={21}/></span><div><span className="access-eyebrow">GESTION DES AUTORISATIONS</span><h2 id="permissions-modal-title">{String(permissionsModal.firstName ?? '')} {String(permissionsModal.lastName ?? '')}</h2><p>Choisissez les fonctionnalités accessibles à ce collaborateur.</p></div><button className="permission-close" aria-label="Fermer" disabled={permissionsSaving} onClick={() => setPermissionsModal(null)}><X size={18}/></button></div>
         <div className="permission-modal-toolbar"><span><strong>{permissionDraft.length}</strong> / {navItems.length} menus autorisés</span><div><button type="button" onClick={() => setPermissionDraft(navItems.map((item) => item.id))}>Tout sélectionner</button><button type="button" onClick={() => setPermissionDraft([])}>Tout désélectionner</button></div></div>
