@@ -1058,3 +1058,85 @@ tbody td>strong{font-weight:600;color:#453c41}
 .access-remove-button:hover{background:#fff1f2;border-color:#e9b6c0}
 .access-edit-button:disabled,.access-remove-button:disabled{opacity:.55;cursor:wait}
 @media(max-width:700px){.access-collaborator-actions{grid-column:1/-1;justify-content:flex-start;margin-top:10px}.access-collaborator-card{flex-wrap:wrap}.access-edit-button,.access-manage-button{min-height:38px}}
+
+
+/* Access & accounts — compact, product-grade SaaS layout */
+.access-page{
+  width:min(100%,1040px);
+  gap:14px;
+  padding:0 0 22px;
+}
+.access-overview{
+  padding:22px 24px 18px;
+  border:1px solid #e5e7eb;
+  border-radius:16px;
+  background:linear-gradient(135deg,#fff 0%,#fff 70%,#fcf7f8 100%);
+  box-shadow:0 2px 8px rgba(15,23,42,.025);
+}
+.access-overview-heading h3{font-size:24px;letter-spacing:-.045em;line-height:1.2}
+.access-overview-heading p{margin-top:7px;font-size:11px;color:#64748b}
+.access-eyebrow{letter-spacing:.13em;font-size:8px}
+.access-refresh{min-height:34px;border-radius:9px;font-size:10px}
+.access-metrics{gap:10px;margin-top:19px}
+.access-metric{
+  min-height:65px;padding:12px 14px;border-radius:11px;
+  background:rgba(255,255,255,.88);border-color:#eceff3;
+  box-shadow:none;
+}
+.access-metric-icon{width:33px;height:33px;border-radius:10px}
+.access-metric small{font-size:10px;color:#64748b}
+.access-metric strong{font-size:22px;line-height:1.1;letter-spacing:-.04em}
+.access-panel{
+  overflow:hidden;border:1px solid #e5e7eb;border-radius:15px;
+  background:#fff;box-shadow:0 2px 8px rgba(15,23,42,.025);
+}
+.access-section-heading{
+  min-height:65px;padding:15px 19px;
+  border-bottom:1px solid #f0f1f3;background:#fff;
+}
+.access-section-heading>div{gap:11px}
+.access-section-index{width:25px;height:25px;border-radius:8px;font-size:9px}
+.access-section-heading h3{font-size:12px;letter-spacing:-.015em}
+.access-section-heading p{margin-top:4px;font-size:10px;line-height:1.45;color:#7b8494}
+.access-count{padding:5px 8px;border-radius:7px;font-size:9px;background:#f8fafc}
+.access-request-list,.access-collaborator-list{padding:0 19px}
+.access-request-card,.access-collaborator-card{min-height:68px;padding:12px 0;gap:12px}
+.access-person-avatar{width:36px;height:36px;border-radius:11px}
+.access-person-info{gap:4px}
+.access-person-info>strong{font-size:11px;letter-spacing:-.01em}
+.access-person-info>small{font-size:9px;color:#8992a2}
+.access-status{font-size:9px;padding:3px 6px}
+.access-menu-count{font-size:9px}
+.access-collaborator-actions{gap:6px}
+.access-edit-button,.access-remove-button{min-height:32px;border-radius:8px;font-size:10px}
+.access-edit-button{padding:0 9px}
+.access-manage-button{min-height:32px;padding:0 10px;border-radius:8px;font-size:10px}
+.access-remove-button{width:32px}
+.access-empty{
+  min-height:0;flex-direction:row;justify-content:flex-start;gap:11px;
+  padding:13px 19px;text-align:left;background:#fcfcfd;
+}
+.access-empty-icon{width:30px;height:30px;flex:0 0 30px;margin:0;border-radius:9px;background:#fff}
+.access-empty-icon svg{width:16px;height:16px}
+.access-empty>strong{font-size:10px;white-space:nowrap}
+.access-empty>p{max-width:none;margin-left:auto;text-align:right;font-size:9px;line-height:1.4}
+.access-skeleton-list{padding:8px 19px}
+.access-skeleton-row{height:44px;margin:6px 0;border-radius:8px}
+.access-security-note{
+  align-items:center;gap:10px;padding:11px 14px;border-radius:11px;background:#fafafa;
+}
+.access-security-note>svg{width:15px;height:15px}
+.access-security-note p{gap:2px;font-size:9px}
+.access-security-note strong{font-size:9px}
+.access-security-note span{font-size:9px}
+@media(max-width:700px){
+  .access-page{gap:10px}
+  .access-overview{padding:17px 14px}
+  .access-overview-heading h3{font-size:21px}
+  .access-metrics{margin-top:14px}
+  .access-section-heading{padding:13px 12px}
+  .access-request-list,.access-collaborator-list{padding:0 12px}
+  .access-empty{align-items:flex-start;flex-wrap:wrap;padding:12px}
+  .access-empty>strong{white-space:normal}
+  .access-empty>p{width:100%;margin:0 0 0 41px;text-align:left}
+}
