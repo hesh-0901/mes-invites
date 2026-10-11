@@ -149,6 +149,7 @@ export default function App() {
   const [templateLocked, setTemplateLocked] = useState(false);
   const [templateSettingsReady, setTemplateSettingsReady] = useState(false);
   const [templateSettingsProjectId, setTemplateSettingsProjectId] = useState<string | null>(null);
+  const canWriteTemplateSettings = currentProfile?.role !== 'collaborator' || allowedMenus.includes('settings') || allowedMenus.includes('templates');
   const [draggingTemplateElement, setDraggingTemplateElement] = useState<'name' | 'qr' | null>(null);
   const templatePreviewRef = useRef<HTMLDivElement | null>(null);
 
@@ -193,7 +194,6 @@ export default function App() {
     const canReadCheckins = currentProfile?.role !== 'collaborator' || allowedMenus.includes('scanner') || allowedMenus.includes('history');
     // Tous les membres approuvés doivent lire le modèle partagé pour afficher/télécharger les invitations.
     const canReadSettings = true;
-    const canWriteTemplateSettings = currentProfile?.role !== 'collaborator' || allowedMenus.includes('settings') || allowedMenus.includes('templates');
     const unsubscribers: Array<() => void> = [];
     const subscribe = <T,>(name: string, enabled: boolean, setter: (items: T[]) => void) => {
       if (!enabled) { setter([]); return; }
