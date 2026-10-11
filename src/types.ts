@@ -14,7 +14,6 @@ export interface Guest {
   invitationStatus: InvitationStatus;
   checkinStatus: CheckinStatus;
   token?: string;
-  shortCode?: string;
   checkedInAt?: string;
 }
 
