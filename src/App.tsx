@@ -897,8 +897,7 @@ export default function App() {
               <div className="scanner-fullscreen-instructions"><span className="scanner-live-dot" /> <strong>Placez le QR code dans le cadre</strong><p>Le contrôle se lance automatiquement dès que le QR est reconnu.</p></div>
               <div className="scanner-fullscreen-viewfinder"><div id="qr-reader" className="qr-reader" /><div className="scanner-viewfinder-overlay" aria-hidden="true"><span className="scanner-corner scanner-corner-tl" /><span className="scanner-corner scanner-corner-tr" /><span className="scanner-corner scanner-corner-bl" /><span className="scanner-corner scanner-corner-br" /></div>{!cameraActive && <div className="scanner-camera-loading"><LoaderCircle size={28} /><span>Activation de la caméra…</span></div>}</div>
               <div className="scanner-fullscreen-bottom">
-                <span className="scanner-secure-note"><LockKeyhole size={14} /> Validation sécurisée</span>
-                <button className="scanner-manual-toggle" onClick={() => setManualCodeOpen((open) => !open)}><Pencil size={15} /> Insérer code</button>
+                <button className="scanner-manual-toggle" onClick={() => setManualCodeOpen((open) => !open)} aria-expanded={manualCodeOpen}><Pencil size={15} /> Insérer code</button>
                 {manualCodeOpen && <form className="scanner-manual-form" onSubmit={(event) => { event.preventDefault(); void validateScan(scanValue); }}><input autoFocus value={scanValue} onChange={(event) => setScanValue(event.target.value)} placeholder="Coller ou saisir le code" aria-label="Code de l’invitation" /><button type="submit" disabled={!scanValue.trim()}>Vérifier</button></form>}
               </div>
             </> : <section className={`scanner-result-screen scanner-result-screen-${scanResult.state}`}>
