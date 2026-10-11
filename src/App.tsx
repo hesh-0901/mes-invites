@@ -12,7 +12,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { Html5Qrcode } from 'html5-qrcode';
 import { auth, firebaseConfigured, firestore } from './firebase';
 import { createUserWithEmailAndPassword, deleteUser, onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth';
-import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, where, setDoc, updateDoc, runTransaction, writeBatch } from 'firebase/firestore';
+import { collection, deleteDoc, deleteField, doc, getDoc, getDocs, onSnapshot, query, where, setDoc, updateDoc, runTransaction, writeBatch } from 'firebase/firestore';
 import { deleteRecord, FIRESTORE_COLLECTIONS, saveCheckinRecord, saveGuestRecord, saveRecord, saveTableRecord } from './firestoreData';
 import type { Checkin, Guest, GuestTable, InvitationKind, Salutation } from './types';
 
@@ -979,8 +979,15 @@ export default function App() {
       if (entry.result === 'accepted' || entry.result === 'already-used') {
         const guest = guests.find((item) => item.id === entry.guestId);
         if (guest && guest.lastCheckinId === entry.id) {
-          const updatedGuest: Guest = { ...guest, checkinStatus: 'not-checked-in', checkedInAt: undefined, lastCheckinId: undefined };
-          await saveGuestRecord(projectId, updatedGuest);
+          const guestRef = doc(firestore, 'projects', projectId, FIRESTORE_COLLECTIONS.guests, guest.id);
+          await updateDoc(guestRef, {
+            checkinStatus: 'not-checked-in',
+            checkedInAt: deleteField(),
+            lastCheckinId: deleteField(),
+          });
+          const updatedGuest: Guest = { ...guest, checkinStatus: 'not-checked-in' };
+          delete updatedGuest.checkedInAt;
+          delete updatedGuest.lastCheckinId;
           setGuests((items) => items.map((item) => item.id === guest.id ? updatedGuest : item));
         }
       }
