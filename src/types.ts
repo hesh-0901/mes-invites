@@ -33,4 +33,5 @@ export interface Checkin {
   result: 'accepted' | 'already-used' | 'invalid';
   timestamp: string;
   operator: string;
+  operatorUid?: string;
 }
