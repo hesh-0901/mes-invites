@@ -104,6 +104,10 @@ export default function App() {
   const defaultCollaboratorMenus = ['dashboard', 'tables', 'guests', 'invitations', 'scanner', 'history'];
   const allowedMenus = Array.isArray(currentProfile?.permissions) ? currentProfile.permissions as string[] : defaultCollaboratorMenus;
   const [page, setPage] = useState<Page>('dashboard');
+  useEffect(() => {
+    if (currentProfile?.role !== 'collaborator' || allowedMenus.length === 0) return;
+    if (!allowedMenus.includes(page)) setPage(allowedMenus[0] as Page);
+  }, [currentProfile?.role, allowedMenus.join('|'), page]);
   const [tables, setTables] = useState<GuestTable[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [checkins, setCheckins] = useState<Checkin[]>([]);
@@ -178,11 +182,17 @@ export default function App() {
     let cancelled = false;
     const loadCloudData = async () => {
       try {
+        // Ne charger que les collections autorisées : une permission partielle
+        // ne doit pas faire échouer tout le chargement du projet.
+        const canReadTables = currentProfile?.role !== 'collaborator' || allowedMenus.includes('tables');
+        const canReadGuests = currentProfile?.role !== 'collaborator' || allowedMenus.includes('guests') || allowedMenus.includes('invitations');
+        const canReadCheckins = currentProfile?.role !== 'collaborator' || allowedMenus.includes('scanner') || allowedMenus.includes('history');
+        const canReadSettings = currentProfile?.role !== 'collaborator' || allowedMenus.includes('settings') || allowedMenus.includes('templates');
         const [cloudTables, cloudGuests, cloudCheckins, cloudSettings] = await Promise.all([
-          loadCollection<GuestTable>(projectId!, FIRESTORE_COLLECTIONS.tables),
-          loadCollection<Guest>(projectId!, FIRESTORE_COLLECTIONS.guests),
-          loadCollection<Checkin>(projectId!, FIRESTORE_COLLECTIONS.checkins),
-          loadCollection<{ id: string; imageUrl?: string; nameX?: number; nameY?: number; qrX?: number; qrY?: number; qrSize?: number; nameSize?: number; nameWidth?: number; nameColor?: string; nameFont?: string; nameEffect?: string; locked?: boolean }>(projectId!, FIRESTORE_COLLECTIONS.settings),
+          canReadTables ? loadCollection<GuestTable>(projectId!, FIRESTORE_COLLECTIONS.tables) : Promise.resolve([] as GuestTable[]),
+          canReadGuests ? loadCollection<Guest>(projectId!, FIRESTORE_COLLECTIONS.guests) : Promise.resolve([] as Guest[]),
+          canReadCheckins ? loadCollection<Checkin>(projectId!, FIRESTORE_COLLECTIONS.checkins) : Promise.resolve([] as Checkin[]),
+          canReadSettings ? loadCollection<{ id: string; imageUrl?: string; nameX?: number; nameY?: number; qrX?: number; qrY?: number; qrSize?: number; nameSize?: number; nameWidth?: number; nameColor?: string; nameFont?: string; nameEffect?: string; locked?: boolean }>(projectId!, FIRESTORE_COLLECTIONS.settings) : Promise.resolve([]),
         ]);
         if (cancelled) return;
         setTables(cloudTables);
@@ -210,7 +220,7 @@ export default function App() {
     };
     if (firebaseConfigured && authUser && (authUser.isAnonymous || authUser.emailVerified || currentProfile?.role === 'collaborator') && accessState === 'approved' && projectId) void loadCloudData();
     return () => { cancelled = true; };
-  }, [authUser, accessState, projectId]);
+  }, [authUser, accessState, projectId, currentProfile, allowedMenus.join('|')]);
 
   useEffect(() => {
     if (!toast) return;
@@ -909,7 +919,7 @@ export default function App() {
         <div className="sidebar-bottom"><div className="help-card"><span className="help-icon"><CircleHelp size={18} /></span><strong>Besoin d’aide ?</strong><p>Préparez vos invitations étape par étape.</p><button onClick={() => notify('Le guide d’utilisation sera ajouté dans une prochaine version.', 'info')}>Consulter le guide <ChevronRight size={14} /></button></div><div className="profile-row"><span className="profile-avatar">{(authUser.displayName || authUser.email || 'U').slice(0,1).toUpperCase()}</span><span className="profile-user-copy"><strong>{authUser.displayName || 'Utilisateur'}</strong><small>{authUser.email || (isSuperAdmin ? 'Super administrateur' : 'Administrateur')}</small></span><button className="profile-menu-button" aria-label="Se déconnecter" title="Se déconnecter" onClick={() => void signOut(auth!)}><MoreHorizontal size={18}/></button></div></div>
       </aside>
       <main className="main-area"><header className="topbar"><div className="topbar-left"><span className="mobile-brand"><Heart size={19} /> Mes Invites</span><div className="breadcrumb-title"><span>Mes Invites</span><ChevronRight size={14} /><strong>{pageTitle}</strong></div></div><div className="topbar-actions"><button className="icon-button notification-button" aria-label="Notifications" onClick={() => notify('Aucune nouvelle notification.', 'info')}><Bell size={18} /><i /></button><span className="topbar-divider" /><button className="profile-mini" onClick={() => void signOut(auth!)} title="Se déconnecter"><span className="profile-avatar">{(authUser.displayName || authUser.email || 'U').slice(0,1).toUpperCase()}</span><ChevronDown size={15} /></button></div></header>
-        <div className="page-content">{page === 'dashboard' && renderDashboard()}{page === 'tables' && renderTables()}{page === 'guests' && renderGuests()}{page === 'invitations' && renderInvitations()}{page === 'templates' && renderTemplates()}{page === 'scanner' && renderScanner()}{page === 'history' && renderHistory()}{page === 'settings' && renderSettings()}<footer className="page-footer"><span>© 2026 Mes Invites</span><span><span className="footer-dot" /> Espace privé</span></footer></div>
+        <div className="page-content">{currentProfile?.role === 'collaborator' && allowedMenus.length === 0 ? <section className="access-empty project-no-permissions"><span className="access-empty-icon"><LockKeyhole size={24}/></span><strong>Accès au projet confirmé</strong><p>Votre compte est actif dans cet espace, mais aucun menu ne vous a encore été attribué. Demandez à l’administrateur de vous accorder les autorisations nécessaires.</p></section> : <>{page === 'dashboard' && renderDashboard()}{page === 'tables' && renderTables()}{page === 'guests' && renderGuests()}{page === 'invitations' && renderInvitations()}{page === 'templates' && renderTemplates()}{page === 'scanner' && renderScanner()}{page === 'history' && renderHistory()}{page === 'settings' && renderSettings()}</>}<footer className="page-footer"><span>© 2026 Mes Invites</span><span><span className="footer-dot" /> Espace privé</span></footer></div>
       </main>
       {editingTable && <Modal title="Modifier la table" description="Modifie les informations, puis tu reviendras à la liste de toutes les tables." onClose={() => setEditingTable(null)}><form onSubmit={saveEditedTable} className="form-stack"><label>Nom de la table<input autoFocus value={editTableName} onChange={(event) => setEditTableName(event.target.value)} required /></label><label>Description <span className="optional-label">Facultatif</span><input value={editTableDescription} onChange={(event) => setEditTableDescription(event.target.value)} placeholder="Ex. Famille et proches" /></label><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setEditingTable(null)}>Annuler</button><button type="submit" className="button button-primary"><Check size={16} /> Enregistrer</button></div></form></Modal>}
       {deleteConfirmation && <Modal title={deleteConfirmation.type === 'table' ? (deleteConfirmation.stage === 1 ? "Supprimer cette table ?" : "Confirmer la suppression de la table") : (deleteConfirmation.stage === 1 ? "Supprimer cet invité ?" : "Confirmer la suppression de l’invité")} description={deleteConfirmation.type === 'table' ? (deleteConfirmation.stage === 1 ? "Vérifie la table concernée avant de continuer." : "Dernière étape : cette table sera retirée de ton événement.") : (deleteConfirmation.stage === 1 ? "Vérifie l’invité concerné avant de continuer." : "Dernière étape : cette fiche invité sera supprimée.")} onClose={() => setDeleteConfirmation(null)}><div className="delete-confirm-content"><span className="delete-confirm-icon"><AlertTriangle size={25} /></span><h3>{deleteConfirmation.stage === 1 ? (deleteConfirmation.type === 'table' ? "Veux-tu vraiment supprimer cette table ?" : "Veux-tu vraiment supprimer cet invité ?") : (deleteConfirmation.type === 'table' ? "Confirmer la suppression définitive de cette table ?" : "Confirmer la suppression définitive de cet invité ?")}</h3><p className="delete-confirm-item-name">{deleteConfirmation.type === 'table' ? deleteConfirmation.item.name : deleteConfirmation.item.displayName}</p><p className="delete-confirm-warning">{deleteConfirmation.stage === 1 ? (deleteConfirmation.type === 'table' ? "La suppression n’a pas encore eu lieu. Une deuxième confirmation sera demandée." : "La suppression n’a pas encore eu lieu. Une deuxième confirmation sera demandée.") : (deleteConfirmation.type === 'table' ? "Cette action est définitive. La table ne pourra pas être récupérée." : "Cette action est définitive. La fiche invité ne pourra pas être récupérée.")}</p><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setDeleteConfirmation(null)}>Annuler</button><button type="button" className="button button-danger-ghost" onClick={advanceDeleteConfirmation}><Trash2 size={16} /> {deleteConfirmation.stage === 1 ? "Oui, continuer" : "Supprimer définitivement"}</button></div></div></Modal>}
