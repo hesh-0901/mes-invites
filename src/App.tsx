@@ -49,6 +49,12 @@ function statusLabel(status: Guest['invitationStatus'] | Guest['checkinStatus'])
 function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
 }
+function guestShortNumber(guest: Guest) {
+  const source = guest.id || guest.token || guest.displayName;
+  let hash = 0;
+  for (let index = 0; index < source.length; index += 1) hash = (hash * 31 + source.charCodeAt(index)) >>> 0;
+  return String(hash % 10000).padStart(4, '0');
+}
 
 export default function App() {
   const [authUser, setAuthUser] = useState<User | null>(null);
@@ -139,6 +145,11 @@ export default function App() {
   const [templateQrX, setTemplateQrX] = useState(78);
   const [templateQrY, setTemplateQrY] = useState(82);
   const [templateQrSize, setTemplateQrSize] = useState(14);
+  const [templateNumberX, setTemplateNumberX] = useState(78);
+  const [templateNumberY, setTemplateNumberY] = useState(73);
+  const [templateNumberSize, setTemplateNumberSize] = useState(2.2);
+  const [templateNumberColor, setTemplateNumberColor] = useState('#762d40');
+  const [templateNumberFont, setTemplateNumberFont] = useState('Arial');
   const [templateNameSize, setTemplateNameSize] = useState(3);
   const [templateNameWidth, setTemplateNameWidth] = useState(60);
   const [templateNameColor, setTemplateNameColor] = useState('#762d40');
@@ -150,7 +161,7 @@ export default function App() {
   const [templateSettingsReady, setTemplateSettingsReady] = useState(false);
   const [templateSettingsProjectId, setTemplateSettingsProjectId] = useState<string | null>(null);
   const canWriteTemplateSettings = currentProfile?.role !== 'collaborator' || allowedMenus.includes('settings') || allowedMenus.includes('templates');
-  const [draggingTemplateElement, setDraggingTemplateElement] = useState<'name' | 'qr' | null>(null);
+  const [draggingTemplateElement, setDraggingTemplateElement] = useState<'name' | 'qr' | 'number' | null>(null);
   const templatePreviewRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -211,8 +222,8 @@ export default function App() {
       unsubscribers.push(onSnapshot(collection(firestore, 'projects', projectId, FIRESTORE_COLLECTIONS.settings), (snapshot) => {
         const templateSettings = snapshot.docs.map((item) => ({ ...item.data(), id: item.id })).find((item) => item.id === 'template') as {
           id: string; imageUrl?: string; nameX?: number; nameY?: number; qrX?: number; qrY?: number;
-          qrSize?: number; nameSize?: number; nameWidth?: number; nameColor?: string;
-          nameFont?: string; nameEffect?: string; locked?: boolean;
+          qrSize?: number; numberX?: number; numberY?: number; numberSize?: number; numberColor?: string; numberFont?: string;
+          nameSize?: number; nameWidth?: number; nameColor?: string; nameFont?: string; nameEffect?: string; locked?: boolean;
         } | undefined;
         if (!templateSettings) { setTemplateSettingsReady(true); setTemplateSettingsProjectId(projectId); return; }
         if (typeof templateSettings.imageUrl === 'string' && templateSettings.imageUrl !== templateImage) {
@@ -224,6 +235,11 @@ export default function App() {
         if (typeof templateSettings.qrX === 'number') setTemplateQrX(templateSettings.qrX);
         if (typeof templateSettings.qrY === 'number') setTemplateQrY(templateSettings.qrY);
         if (typeof templateSettings.qrSize === 'number') setTemplateQrSize(templateSettings.qrSize);
+        if (typeof templateSettings.numberX === 'number') setTemplateNumberX(templateSettings.numberX);
+        if (typeof templateSettings.numberY === 'number') setTemplateNumberY(templateSettings.numberY);
+        if (typeof templateSettings.numberSize === 'number') setTemplateNumberSize(templateSettings.numberSize);
+        if (typeof templateSettings.numberColor === 'string') setTemplateNumberColor(templateSettings.numberColor);
+        if (typeof templateSettings.numberFont === 'string') setTemplateNumberFont(templateSettings.numberFont);
         if (typeof templateSettings.nameSize === 'number') setTemplateNameSize(templateSettings.nameSize);
         if (typeof templateSettings.nameWidth === 'number') setTemplateNameWidth(templateSettings.nameWidth);
         if (typeof templateSettings.nameColor === 'string') setTemplateNameColor(templateSettings.nameColor);
@@ -250,7 +266,9 @@ export default function App() {
     const timeout = window.setTimeout(() => {
       void setDoc(doc(firestore, 'projects', projectId, FIRESTORE_COLLECTIONS.settings, 'template'), {
         id: 'template', imageUrl: templateImage, nameX: templateNameX, nameY: templateNameY,
-        qrX: templateQrX, qrY: templateQrY, qrSize: templateQrSize, nameSize: templateNameSize,
+        qrX: templateQrX, qrY: templateQrY, qrSize: templateQrSize,
+        numberX: templateNumberX, numberY: templateNumberY, numberSize: templateNumberSize,
+        numberColor: templateNumberColor, numberFont: templateNumberFont, nameSize: templateNameSize,
         nameWidth: templateNameWidth, nameColor: templateNameColor, nameFont: templateNameFont,
         nameEffect: templateNameEffect, locked: templateLocked,
         updatedAt: new Date().toISOString(), updatedBy: authUser?.uid ?? null,
@@ -260,7 +278,7 @@ export default function App() {
       });
     }, 350);
     return () => window.clearTimeout(timeout);
-  }, [projectId, accessState, templateSettingsReady, templateSettingsProjectId, canWriteTemplateSettings, templateImage, templateNameX, templateNameY, templateQrX, templateQrY, templateQrSize, templateNameSize, templateNameWidth, templateNameColor, templateNameFont, templateNameEffect, templateLocked, authUser?.uid]);
+  }, [projectId, accessState, templateSettingsReady, templateSettingsProjectId, canWriteTemplateSettings, templateImage, templateNameX, templateNameY, templateQrX, templateQrY, templateQrSize, templateNumberX, templateNumberY, templateNumberSize, templateNumberColor, templateNumberFont, templateNameSize, templateNameWidth, templateNameColor, templateNameFont, templateNameEffect, templateLocked, authUser?.uid]);
 
   useEffect(() => {
     if (!toast) return;
@@ -517,6 +535,13 @@ export default function App() {
       }
       ctx.fillText(guest.displayName, width * templateNameX / 100, height * templateNameY / 100, width * templateNameWidth / 100);
       ctx.shadowBlur = 0;
+      ctx.save();
+      ctx.fillStyle = templateNumberColor;
+      ctx.font = `700 ${Math.max(10, width * templateNumberSize / 100)}px ${templateNumberFont}, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(guestShortNumber(guest), width * templateNumberX / 100, height * templateNumberY / 100);
+      ctx.restore();
       const qrSvg = renderToStaticMarkup(<QRCodeSVG value={guest.token} size={512} level="H" includeMargin />);
       // SVG images loaded by Image() need an explicit SVG namespace in some browsers.
       const compatibleQrSvg = qrSvg.includes('xmlns="http://www.w3.org/2000/svg"')
@@ -667,7 +692,8 @@ export default function App() {
     const x = Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100));
     const y = Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100));
     if (draggingTemplateElement === 'name') { setTemplateNameX(x); setTemplateNameY(y); }
-    else { setTemplateQrX(x); setTemplateQrY(y); }
+    else if (draggingTemplateElement === 'qr') { setTemplateQrX(x); setTemplateQrY(y); }
+    else { setTemplateNumberX(x); setTemplateNumberY(y); }
   };
 
   const downloadOriginalTemplate = async () => {
@@ -697,13 +723,18 @@ export default function App() {
       window.localStorage.setItem('mes-invites-template-qr-x', String(templateQrX));
       window.localStorage.setItem('mes-invites-template-qr-y', String(templateQrY));
       window.localStorage.setItem('mes-invites-template-qr-size', String(templateQrSize));
+      window.localStorage.setItem('mes-invites-template-number-x', String(templateNumberX));
+      window.localStorage.setItem('mes-invites-template-number-y', String(templateNumberY));
+      window.localStorage.setItem('mes-invites-template-number-size', String(templateNumberSize));
+      window.localStorage.setItem('mes-invites-template-number-color', templateNumberColor);
+      window.localStorage.setItem('mes-invites-template-number-font', templateNumberFont);
       window.localStorage.setItem('mes-invites-template-name-size', String(templateNameSize));
       window.localStorage.setItem('mes-invites-template-name-width', String(templateNameWidth));
       window.localStorage.setItem('mes-invites-template-name-color', templateNameColor);
       window.localStorage.setItem('mes-invites-template-name-font', templateNameFont);
       window.localStorage.setItem('mes-invites-template-name-effect', templateNameEffect);
       window.localStorage.setItem('mes-invites-template-locked', 'true');
-      void saveRecord(projectId!, FIRESTORE_COLLECTIONS.settings, { id: 'template', imageUrl: templateImage, nameX: templateNameX, nameY: templateNameY, qrX: templateQrX, qrY: templateQrY, qrSize: templateQrSize, nameSize: templateNameSize, nameWidth: templateNameWidth, nameColor: templateNameColor, nameFont: templateNameFont, nameEffect: templateNameEffect, locked: true, updatedAt: new Date().toISOString() }).catch(() => undefined);
+      void saveRecord(projectId!, FIRESTORE_COLLECTIONS.settings, { id: 'template', imageUrl: templateImage, nameX: templateNameX, nameY: templateNameY, qrX: templateQrX, qrY: templateQrY, qrSize: templateQrSize, numberX: templateNumberX, numberY: templateNumberY, numberSize: templateNumberSize, numberColor: templateNumberColor, numberFont: templateNumberFont, nameSize: templateNameSize, nameWidth: templateNameWidth, nameColor: templateNameColor, nameFont: templateNameFont, nameEffect: templateNameEffect, locked: true, updatedAt: new Date().toISOString() }).catch(() => undefined);
       setTemplateLocked(true);
       notify('Modèle enregistré. Éditeur verrouillé.');
     } catch { notify('Impossible d’enregistrer les paramètres du template.', 'error'); }
@@ -741,7 +772,7 @@ export default function App() {
           <div className="template-locked-canvas" style={{ aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4' }}>
             <div className="template-live-preview" style={{ backgroundImage: `url("${templateImage}")`, aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4', backgroundSize: '100% 100%' }}>
               <div className="template-preview-name" style={{ left: `${templateNameX}%`, top: `${templateNameY}%`, fontSize: `${(fitNameFontSize(templateSampleName || 'Nom de l’invité', templateImageDimensions?.width ?? 1000) / (templateImageDimensions?.width ?? 1000)) * 100}cqw`, maxWidth: `${templateNameWidth}%`, overflowWrap: 'anywhere', wordBreak: 'break-word', color: templateNameColor, fontFamily: templateNameFont, textShadow: templateNameEffect === 'shadow' ? '0 1px 3px #ffffffcc' : templateNameEffect === 'glow' ? `0 0 8px ${templateNameColor}` : 'none', WebkitTextStroke: templateNameEffect === 'outline' ? '0.6px white' : '0px transparent' }}>{templateSampleName || 'Nom de l’invité'}</div>
-              <div className="template-preview-qr" style={{ left: `${templateQrX}%`, top: `${templateQrY}%`, width: `${templateQrSize}%` }}><QRCodeSVG value="APERÇU-MODÈLE-MES-INVITES" size={128} level="H" includeMargin /></div>
+              <div className="template-preview-number" style={{ left: `${templateNumberX}%`, top: `${templateNumberY}%`, fontSize: `${templateNumberSize}cqw`, color: templateNumberColor, fontFamily: templateNumberFont }}>{guestShortNumber({ id: 'preview-number', displayName: templateSampleName } as Guest)}</div><div className="template-preview-qr" style={{ left: `${templateQrX}%`, top: `${templateQrY}%`, width: `${templateQrSize}%` }}><QRCodeSVG value="APERÇU-MODÈLE-MES-INVITES" size={128} level="H" includeMargin /></div>
             </div>
           </div>
           <p className="template-locked-caption"><CheckCircle2 size={14} /> Le modèle est prêt pour générer les invitations.</p>
@@ -755,12 +786,12 @@ export default function App() {
               <label className="template-field">Nom de prévisualisation<input value={templateSampleName} onChange={(event) => setTemplateSampleName(event.target.value)} placeholder="Nom de l’invité" /></label>
               <div className="template-control-group"><strong>Style du texte</strong><label>Police<select value={templateNameFont} onChange={(e) => setTemplateNameFont(e.target.value)}><option value="Georgia">Georgia — classique</option><option value="Arial">Arial — moderne</option><option value="Times New Roman">Times New Roman</option><option value="Garamond">Garamond — élégant</option><option value="Verdana">Verdana — lisible</option><option value="Courier New">Courier New</option></select></label><label>Couleur du texte<input type="color" value={templateNameColor} onChange={(e) => setTemplateNameColor(e.target.value)} /></label><label>Effet du texte<select value={templateNameEffect} onChange={(e) => setTemplateNameEffect(e.target.value)}><option value="none">Aucun</option><option value="shadow">Ombre claire</option><option value="outline">Contour blanc</option><option value="glow">Lueur</option></select></label></div>
               <div className="template-control-group"><strong>Position du nom</strong><label>Horizontal — {templateNameX}%<input type="range" min="0" max="100" value={templateNameX} onChange={(e) => setTemplateNameX(Number(e.target.value))} /></label><label>Vertical — {templateNameY}%<input type="range" min="0" max="100" value={templateNameY} onChange={(e) => setTemplateNameY(Number(e.target.value))} /></label><label>Taille maximale du texte — {templateNameSize}% de la largeur<input type="range" min="1" max="7" step="0.25" value={templateNameSize} onChange={(e) => setTemplateNameSize(Number(e.target.value))} /></label><label>Largeur réservée au nom — {templateNameWidth}%<input type="range" min="10" max="95" step="1" value={templateNameWidth} onChange={(e) => setTemplateNameWidth(Number(e.target.value))} /></label><small className="muted-copy">Les noms longs sont automatiquement réduits pour rester dans cette zone.</small></div>
-              <div className="template-control-group"><strong>Position du QR code</strong><label>Horizontal — {templateQrX}%<input type="range" min="0" max="100" value={templateQrX} onChange={(e) => setTemplateQrX(Number(e.target.value))} /></label><label>Vertical — {templateQrY}%<input type="range" min="0" max="100" value={templateQrY} onChange={(e) => setTemplateQrY(Number(e.target.value))} /></label><label>Taille — {templateQrSize}% de la largeur<input type="range" min="6" max="28" step="1" value={templateQrSize} onChange={(e) => setTemplateQrSize(Number(e.target.value))} /></label></div>
-              <div className="modal-actions"><button className="button button-secondary" onClick={() => { setTemplateNameX(50); setTemplateNameY(55); setTemplateQrX(78); setTemplateQrY(82); setTemplateQrSize(14); setTemplateNameSize(3); setTemplateNameWidth(60); setTemplateNameColor('#762d40'); setTemplateNameFont('Georgia'); setTemplateNameEffect('shadow'); }}>Réinitialiser</button><button className="button button-primary" onClick={saveTemplateSettings}><Check size={16} /> Enregistrer et verrouiller</button></div>
+              <div className="template-control-group"><strong>Numéro au-dessus du QR code</strong><label>Position horizontale — {templateNumberX}%<input type="range" min="0" max="100" value={templateNumberX} onChange={(e) => setTemplateNumberX(Number(e.target.value))} /></label><label>Position verticale — {templateNumberY}%<input type="range" min="0" max="100" value={templateNumberY} onChange={(e) => setTemplateNumberY(Number(e.target.value))} /></label><label>Taille du numéro — {templateNumberSize}% de la largeur<input type="range" min="0.8" max="5" step="0.2" value={templateNumberSize} onChange={(e) => setTemplateNumberSize(Number(e.target.value))} /></label><label>Couleur du numéro<input type="color" value={templateNumberColor} onChange={(e) => setTemplateNumberColor(e.target.value)} /></label><label>Police du numéro<select value={templateNumberFont} onChange={(e) => setTemplateNumberFont(e.target.value)}><option value="Arial">Arial</option><option value="Georgia">Georgia</option><option value="Times New Roman">Times New Roman</option><option value="Garamond">Garamond</option><option value="Verdana">Verdana</option></select></label></div><div className="template-control-group"><strong>Position du QR code</strong><label>Horizontal — {templateQrX}%<input type="range" min="0" max="100" value={templateQrX} onChange={(e) => setTemplateQrX(Number(e.target.value))} /></label><label>Vertical — {templateQrY}%<input type="range" min="0" max="100" value={templateQrY} onChange={(e) => setTemplateQrY(Number(e.target.value))} /></label><label>Taille — {templateQrSize}% de la largeur<input type="range" min="6" max="28" step="1" value={templateQrSize} onChange={(e) => setTemplateQrSize(Number(e.target.value))} /></label></div>
+              <div className="modal-actions"><button className="button button-secondary" onClick={() => { setTemplateNameX(50); setTemplateNameY(55); setTemplateQrX(78); setTemplateQrY(82); setTemplateQrSize(14); setTemplateNumberX(78); setTemplateNumberY(73); setTemplateNumberSize(2.2); setTemplateNumberColor('#762d40'); setTemplateNumberFont('Arial'); setTemplateNameSize(3); setTemplateNameWidth(60); setTemplateNameColor('#762d40'); setTemplateNameFont('Georgia'); setTemplateNameEffect('shadow'); }}>Réinitialiser</button><button className="button button-primary" onClick={saveTemplateSettings}><Check size={16} /> Enregistrer et verrouiller</button></div>
               <p className="muted-copy small-note"><LockKeyhole size={14} /> Après l’enregistrement, les paramètres seront masqués. Utilise « Modifier » pour les afficher de nouveau.</p>
             </div>
             <div className="panel template-preview-panel"><div className="panel-heading"><div><h3>Aperçu en direct</h3><p>Exemple de placement du nom et du QR code.</p></div><Eye size={18} className="muted-icon" /></div>{templateImage && <button className="button button-secondary template-download-original" onClick={() => void downloadOriginalTemplate()}><Download size={15} /> Télécharger le template original</button>}
-              {templateImage ? <div ref={templatePreviewRef} className="template-live-preview" onPointerMove={moveTemplateElement} onPointerUp={() => setDraggingTemplateElement(null)} onPointerCancel={() => setDraggingTemplateElement(null)} style={{ backgroundImage: `url("${templateImage}")`, aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4', backgroundSize: '100% 100%' }}><div className={`template-preview-name template-draggable ${draggingTemplateElement === 'name' ? 'template-dragging' : ''}`} onPointerDown={(event) => { event.preventDefault(); setDraggingTemplateElement('name'); event.currentTarget.setPointerCapture(event.pointerId); }} style={{ left: `${templateNameX}%`, top: `${templateNameY}%`, fontSize: `${(fitNameFontSize(templateSampleName || 'Nom de l’invité', templateImageDimensions?.width ?? 1000) / (templateImageDimensions?.width ?? 1000)) * 100}cqw`, maxWidth: `${templateNameWidth}%`, overflowWrap: 'anywhere', wordBreak: 'break-word', color: templateNameColor, fontFamily: templateNameFont, textShadow: templateNameEffect === 'shadow' ? '0 1px 3px #ffffffcc' : templateNameEffect === 'glow' ? `0 0 8px ${templateNameColor}` : 'none', WebkitTextStroke: templateNameEffect === 'outline' ? '0.6px white' : '0px transparent' }}>{templateSampleName || 'Nom de l’invité'}<span className="template-drag-hint">Déplacer</span></div><div className={`template-preview-qr template-draggable ${draggingTemplateElement === 'qr' ? 'template-dragging' : ''}`} onPointerDown={(event) => { event.preventDefault(); setDraggingTemplateElement('qr'); event.currentTarget.setPointerCapture(event.pointerId); }} style={{ left: `${templateQrX}%`, top: `${templateQrY}%`, width: `${templateQrSize}%` }}><QRCodeSVG value="PREVIEW-QR-MES-INVITES" size={128} level="H" includeMargin /><span className="template-drag-hint">Déplacer</span></div></div> : <div className="template-preview-empty"><FileImage size={34} /><strong>Importe ton modèle pour commencer</strong><span>Formats acceptés : PNG, JPG et WebP. L’aperçu conserve le ratio de l’image.</span></div>}
+              {templateImage ? <div ref={templatePreviewRef} className="template-live-preview" onPointerMove={moveTemplateElement} onPointerUp={() => setDraggingTemplateElement(null)} onPointerCancel={() => setDraggingTemplateElement(null)} style={{ backgroundImage: `url("${templateImage}")`, aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4', backgroundSize: '100% 100%' }}><div className={`template-preview-name template-draggable ${draggingTemplateElement === 'name' ? 'template-dragging' : ''}`} onPointerDown={(event) => { event.preventDefault(); setDraggingTemplateElement('name'); event.currentTarget.setPointerCapture(event.pointerId); }} style={{ left: `${templateNameX}%`, top: `${templateNameY}%`, fontSize: `${(fitNameFontSize(templateSampleName || 'Nom de l’invité', templateImageDimensions?.width ?? 1000) / (templateImageDimensions?.width ?? 1000)) * 100}cqw`, maxWidth: `${templateNameWidth}%`, overflowWrap: 'anywhere', wordBreak: 'break-word', color: templateNameColor, fontFamily: templateNameFont, textShadow: templateNameEffect === 'shadow' ? '0 1px 3px #ffffffcc' : templateNameEffect === 'glow' ? `0 0 8px ${templateNameColor}` : 'none', WebkitTextStroke: templateNameEffect === 'outline' ? '0.6px white' : '0px transparent' }}>{templateSampleName || 'Nom de l’invité'}<span className="template-drag-hint">Déplacer</span></div><div className={`template-preview-number template-draggable ${draggingTemplateElement === 'number' ? 'template-dragging' : ''}`} onPointerDown={(event) => { event.preventDefault(); setDraggingTemplateElement('number'); event.currentTarget.setPointerCapture(event.pointerId); }} style={{ left: `${templateNumberX}%`, top: `${templateNumberY}%`, fontSize: `${templateNumberSize}cqw`, color: templateNumberColor, fontFamily: templateNumberFont }}>{guestShortNumber({ id: 'preview-number', displayName: templateSampleName } as Guest)}<span className="template-drag-hint">Déplacer</span></div><div className={`template-preview-qr template-draggable ${draggingTemplateElement === 'qr' ? 'template-dragging' : ''}`} onPointerDown={(event) => { event.preventDefault(); setDraggingTemplateElement('qr'); event.currentTarget.setPointerCapture(event.pointerId); }} style={{ left: `${templateQrX}%`, top: `${templateQrY}%`, width: `${templateQrSize}%` }}><QRCodeSVG value="PREVIEW-QR-MES-INVITES" size={128} level="H" includeMargin /><span className="template-drag-hint">Déplacer</span></div></div> : <div className="template-preview-empty"><FileImage size={34} /><strong>Importe ton modèle pour commencer</strong><span>Formats acceptés : PNG, JPG et WebP. L’aperçu conserve le ratio de l’image.</span></div>}
               {templateImage && <button className="button button-danger-ghost" onClick={() => { window.localStorage.removeItem('mes-invites-template-image'); window.localStorage.setItem('mes-invites-template-locked', 'false'); setTemplateLocked(false); setTemplateImage(''); notify('Template retiré de cet appareil.', 'info'); }}><Trash2 size={15} /> Retirer ce template</button>}
             </div>
           </section>
