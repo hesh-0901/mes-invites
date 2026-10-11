@@ -472,7 +472,7 @@ export default function App() {
     const entryId = makeId('checkin');
 
     if (!cachedGuest) {
-      const entry: Checkin = { id: entryId, guestId: '', guestName: 'Invitation inconnue', tableName: '—', result: 'invalid', timestamp, operator: authUser.displayName || authUser.email || 'Accueil' };
+      const entry: Checkin = { id: entryId, guestId: '', guestName: 'Invitation inconnue', tableName: '—', result: 'invalid', timestamp, operator: authUser.displayName || authUser.email || 'Accueil', operatorUid: authUser.uid };
       setScanResult({ state: 'invalid', message: matchingGuests.length > 1 ? 'Ce numéro d’invitation est ambigu. Utilise le QR code complet pour éviter une erreur.' : 'Invitation inconnue ou code QR non reconnu.' });
       try {
         await saveCheckinRecord(projectId, entry);
@@ -494,7 +494,7 @@ export default function App() {
         const entry: Checkin = {
           id: entryId, guestId: guest.id, guestName: guest.displayName,
           tableName: table?.name ?? 'Table inconnue', result: 'invalid',
-          timestamp, operator: authUser.displayName || authUser.email || 'Accueil',
+          timestamp, operator: authUser.displayName || authUser.email || 'Accueil', operatorUid: authUser.uid,
         };
 
         if (guest.token !== code && guest.id !== code && guestShortNumber(guest) !== code) {
@@ -964,17 +964,11 @@ export default function App() {
     </>
   );
 
-  const canResetHistoryEntry = (entry: Checkin) => {
-    if (isSuperAdmin) return true;
-    if (currentProfile?.role === 'admin' && projectId) return true;
-    const operatorNames = [
-      authUser?.displayName,
-      authUser?.email,
-      [currentProfile?.firstName, currentProfile?.lastName].filter((part) => typeof part === 'string' && part.trim()).join(' '),
-    ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
-    const normalizeOperator = (value: string) => value.trim().replace(/\\s+/g, ' ').toLocaleLowerCase('fr');
-    return operatorNames.some((name) => normalizeOperator(name) === normalizeOperator(entry.operator));
-  };
+  const canResetHistoryEntry = (entry: Checkin) => (
+    isSuperAdmin
+    || (currentProfile?.role === 'admin' && Boolean(projectId))
+    || Boolean(authUser?.uid && entry.operatorUid === authUser.uid)
+  );
 
   const resetHistoryEntry = async (entry: Checkin) => {
     if (!firestore || !projectId || resettingCheckinId || !canResetHistoryEntry(entry)) return;
