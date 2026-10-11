@@ -1286,3 +1286,14 @@ tbody td>strong{font-weight:600;color:#453c41}
  .column-filters select{height:39px;font-size:12px}
  .history-filters{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* Filters live inside existing column headers, with no additional filter row */
+.filter-heading{display:flex;align-items:center;justify-content:space-between;gap:5px;min-width:0}
+.filter-heading>span{min-width:0}
+.column-filter-select,.column-filter-input{display:block;min-width:0;max-width:100%;width:100%;height:24px;padding:1px 3px;border:1px solid transparent;border-radius:5px;background:transparent;color:inherit;font:inherit;font-size:10px;font-weight:500;outline:none}
+.column-filter-select{cursor:pointer}
+.column-filter-input{border-color:#e2e8f0;background:#fff}
+.column-filter-input:focus,.column-filter-select:focus{border-color:#c9a1ab;background:#fff}
+.invitation-inline-filters{display:flex;align-items:center;gap:7px;margin-top:8px}
+.invitation-inline-filters select{max-width:150px;min-width:0;height:30px;padding:0 7px;border:1px solid #e2e8f0;border-radius:7px;background:#fff;color:#64748b;font:inherit;font-size:10px}
+@media(max-width:700px){.filter-heading{align-items:flex-start;flex-direction:column;gap:4px}.column-filter-select,.column-filter-input{height:25px;font-size:10px}.invitation-inline-filters{flex-wrap:wrap}.invitation-inline-filters select{flex:1;max-width:none}}
