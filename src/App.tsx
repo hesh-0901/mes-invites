@@ -1068,6 +1068,51 @@ export default function App() {
 
   const [settingsTab, setSettingsTab] = useState<'general' | 'event' | 'template' | 'access'>('general');
   const [showProjectKey, setShowProjectKey] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<(Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }> }) | null>(null);
+  const [pwaInstalled, setPwaInstalled] = useState(false);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
+  const [isIOSDevice, setIsIOSDevice] = useState(false);
+
+  useEffect(() => {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+      || ('standalone' in navigator && (navigator as Navigator & { standalone?: boolean }).standalone === true);
+    setPwaInstalled(standalone);
+    setIsIOSDevice(/iPad|iPhone|iPod/.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
+    const onBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }> });
+    };
+    const onInstalled = () => {
+      setPwaInstalled(true);
+      setInstallPrompt(null);
+      setShowInstallHelp(false);
+      notify('Mes Invites a été installée sur cet appareil.', 'success');
+    };
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, []);
+
+  const installPwa = async () => {
+    if (!installPrompt) {
+      setShowInstallHelp(true);
+      return;
+    }
+    try {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      if (choice.outcome === 'accepted') setShowInstallHelp(false);
+      setInstallPrompt(null);
+    } catch (error) {
+      console.error('Installation PWA impossible :', error);
+      notify('Impossible de lancer l’installation. Utilise le menu du navigateur.', 'error');
+    }
+  };
 
   const renderSettings = () => (
     <>
@@ -1097,6 +1142,30 @@ export default function App() {
         <section className="settings-grid">
         <div className="panel"><div className="panel-heading"><div><h3>État des services</h3><p>Connexion et configuration cloud</p></div><Activity size={19} className="muted-icon"/></div><div className="setting-row"><span className="setting-icon"><ShieldCheck size={18}/></span><div><strong>Firebase</strong><small>{firebaseConfigured ? 'Configuration détectée' : 'Variables VITE_FIREBASE_* absentes'}</small></div><span className={firebaseConfigured ? 'status-pill status-green' : 'status-pill status-amber'}><span className="status-dot"/>{firebaseConfigured ? 'Configuré' : 'À configurer'}</span></div><div className="notice notice-info setting-notice"><LockKeyhole size={18}/><div><strong>Accès sécurisé</strong><p>La connexion nécessite un e-mail vérifié et un compte approuvé.</p></div></div></div>
         <div className="panel"><div className="panel-heading"><div><h3>Compte connecté</h3><p>Identité de la session actuelle</p></div><Users size={19} className="muted-icon"/></div><div className="settings-profile-head"><span className="settings-large-avatar">{(authUser?.displayName || authUser?.email || 'U').slice(0,1).toUpperCase()}</span><div><h3>{authUser?.displayName || 'Utilisateur'}</h3><p>{authUser?.email || 'E-mail indisponible'}</p><span className="status-pill status-green"><span className="status-dot"/>Connecté</span></div></div><button className="button button-secondary" onClick={() => auth && void signOut(auth)}><LockKeyhole size={16}/> Se déconnecter</button></div>
+        </section>
+        <section className="panel pwa-install-panel">
+          <div className="panel-heading">
+            <div><h3>Installer Mes Invites</h3><p>Accédez à votre espace depuis l’écran d’accueil, comme une application.</p></div>
+            <span className="setting-icon"><Download size={20}/></span>
+          </div>
+          {pwaInstalled ? (
+            <div className="notice notice-info setting-notice"><CheckCircle2 size={18}/><div><strong>Application installée</strong><p>Mes Invites est déjà installée sur cet appareil.</p></div></div>
+          ) : (
+            <>
+              <button type="button" className="button button-primary" onClick={() => void installPwa()}>
+                <Download size={17}/>{installPrompt ? 'Installer maintenant' : 'Comment installer ?'}
+              </button>
+              {showInstallHelp && <div className="notice notice-info setting-notice pwa-install-help">
+                <div>
+                  <strong>{isIOSDevice ? 'Installer sur iPhone ou iPad' : 'Installer depuis le navigateur'}</strong>
+                  {isIOSDevice
+                    ? <p>Ouvre cette page dans Safari, appuie sur le bouton Partager, puis choisis « Sur l’écran d’accueil » et confirme avec « Ajouter ».</p>
+                    : <p>Si aucune fenêtre ne s’ouvre, utilise le menu du navigateur et sélectionne « Installer Mes Invites » ou « Ajouter à l’écran d’accueil ». L’option dépend du navigateur et de ses critères d’installation.</p>}
+                </div>
+                <button type="button" className="icon-button" aria-label="Fermer les instructions" onClick={() => setShowInstallHelp(false)}><X size={16}/></button>
+              </div>}
+            </>
+          )}
         </section>
       </>}
       {settingsTab === 'event' && <section className="panel settings-detail-panel"><div className="panel-heading"><div><h3>Informations de l’événement</h3><p>Les détails de votre réception seront configurables ici.</p></div><Heart size={20} className="muted-icon"/></div><div className="event-placeholder"><span className="event-monogram">M<span>&</span>I</span><strong>Votre événement</strong><p>Le nom des mariés, la date, le lieu et les informations de contact seront regroupés dans cette section.</p><span className="status-pill status-neutral"><span className="status-dot"/>À configurer</span></div></section>}
