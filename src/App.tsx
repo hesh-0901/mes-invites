@@ -798,6 +798,7 @@ export default function App() {
         await updateDoc(doc(firestore, 'users', uid), { status, reviewedAt: new Date().toISOString(), reviewedBy: auth.currentUser?.uid ?? null });
       }
       setAdminRequests((current) => current.filter((entry) => entry.uid !== uid));
+      if (!isSuperAdmin && request.role === 'collaborator' && status === 'approved') void loadProjectCollaborators();
       notify(status === 'approved' ? (isSuperAdmin ? 'Compte administrateur approuvé et espace créé.' : 'Collaborateur approuvé.') : 'Demande refusée.', 'success');
     } catch (error) {
       const firebaseError = error as { code?: string; message?: string };
@@ -817,7 +818,7 @@ export default function App() {
         <button role="tab" aria-selected={settingsTab === 'general'} className={settingsTab === 'general' ? 'settings-tab active' : 'settings-tab'} onClick={() => setSettingsTab('general')}><Activity size={16}/> Général</button>
         <button role="tab" aria-selected={settingsTab === 'event'} className={settingsTab === 'event' ? 'settings-tab active' : 'settings-tab'} onClick={() => setSettingsTab('event')}><Heart size={16}/> Événement</button>
         <button role="tab" aria-selected={settingsTab === 'template'} className={settingsTab === 'template' ? 'settings-tab active' : 'settings-tab'} onClick={() => setSettingsTab('template')}><FileImage size={16}/> Invitations</button>
-        {(isSuperAdmin || currentProfile?.role === 'admin') && <button role="tab" aria-selected={settingsTab === 'access'} className={settingsTab === 'access' ? 'settings-tab active' : 'settings-tab'} onClick={() => { setSettingsTab('access'); void loadAdminRequests(); }}><ShieldCheck size={16}/> Accès & comptes</button>}
+        {(isSuperAdmin || currentProfile?.role === 'admin') && <button role="tab" aria-selected={settingsTab === 'access'} className={settingsTab === 'access' ? 'settings-tab active' : 'settings-tab'} onClick={() => { setSettingsTab('access'); void loadAdminRequests(); if (!isSuperAdmin) void loadProjectCollaborators(); }}><ShieldCheck size={16}/> Accès & comptes</button>}
       </div>
       {settingsTab === 'general' && <>
         {currentProfile?.role === 'admin' && <section className="panel project-key-panel">
@@ -886,7 +887,7 @@ export default function App() {
           </section>}
           <div className="access-security-note"><LockKeyhole size={17}/><p><strong>Accès protégés par Firestore</strong><span>Les permissions sont appliquées côté base de données. Un collaborateur ne peut accéder qu’à son propre espace.</span></p></div>
         </div>
-      </>}}
+      </>}
     </>
   );
 
