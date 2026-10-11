@@ -233,7 +233,10 @@ service cloud.firestore {
     }
 
     function validGuestCheckinReset(projectId) {
-      return signedIn()
+      return authenticated()
+        && hasProfile()
+        && userProfile().status == 'approved'
+        && userProfile().projectId == projectId
         && resource.data.checkinStatus == 'checked-in'
         && resource.data.lastCheckinId is string
         && request.resource.data.checkinStatus == 'not-checked-in'
@@ -278,7 +281,11 @@ service cloud.firestore {
           && (
             isSuperAdmin()
             || isProjectAdmin(projectId)
-            || (signedIn() && resource.data.operatorUid is string
+            || (authenticated()
+              && hasProfile()
+              && userProfile().status == 'approved'
+              && userProfile().projectId == projectId
+              && resource.data.operatorUid is string
               && resource.data.operatorUid == request.auth.uid)
           )
         )
