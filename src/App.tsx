@@ -12,7 +12,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { Html5Qrcode } from 'html5-qrcode';
 import { auth, firebaseConfigured, firestore } from './firebase';
 import { createUserWithEmailAndPassword, deleteUser, onAuthStateChanged, sendEmailVerification, signInWithEmailAndPassword, signOut, updateProfile, type User } from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, onSnapshot, query, where, setDoc, updateDoc } from 'firebase/firestore';
 import { deleteRecord, FIRESTORE_COLLECTIONS, loadCollection, saveCheckinRecord, saveGuestRecord, saveRecord, saveTableRecord } from './firestoreData';
 import type { Checkin, Guest, GuestTable, InvitationKind, Salutation } from './types';
 
@@ -148,6 +148,7 @@ export default function App() {
   const [templateImageDimensions, setTemplateImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const [templateSampleName, setTemplateSampleName] = useState('Nom de l’invité');
   const [templateLocked, setTemplateLocked] = useState(() => window.localStorage.getItem('mes-invites-template-locked') === 'true');
+  const [templateSettingsReady, setTemplateSettingsReady] = useState(false);
   const [draggingTemplateElement, setDraggingTemplateElement] = useState<'name' | 'qr' | null>(null);
   const templatePreviewRef = useRef<HTMLDivElement | null>(null);
 
@@ -184,48 +185,75 @@ export default function App() {
     }
   }, [page]);
   useEffect(() => {
-    let cancelled = false;
-    const loadCloudData = async () => {
-      try {
-        // Ne charger que les collections autorisées : une permission partielle
-        // ne doit pas faire échouer tout le chargement du projet.
-        const canReadTables = currentProfile?.role !== 'collaborator' || allowedMenus.includes('tables');
-        const canReadGuests = currentProfile?.role !== 'collaborator' || allowedMenus.includes('guests') || allowedMenus.includes('invitations');
-        const canReadCheckins = currentProfile?.role !== 'collaborator' || allowedMenus.includes('scanner') || allowedMenus.includes('history');
-        const canReadSettings = currentProfile?.role !== 'collaborator' || allowedMenus.includes('settings') || allowedMenus.includes('templates');
-        const [cloudTables, cloudGuests, cloudCheckins, cloudSettings] = await Promise.all([
-          canReadTables ? loadCollection<GuestTable>(projectId!, FIRESTORE_COLLECTIONS.tables) : Promise.resolve([] as GuestTable[]),
-          canReadGuests ? loadCollection<Guest>(projectId!, FIRESTORE_COLLECTIONS.guests) : Promise.resolve([] as Guest[]),
-          canReadCheckins ? loadCollection<Checkin>(projectId!, FIRESTORE_COLLECTIONS.checkins) : Promise.resolve([] as Checkin[]),
-          canReadSettings ? loadCollection<{ id: string; imageUrl?: string; nameX?: number; nameY?: number; qrX?: number; qrY?: number; qrSize?: number; nameSize?: number; nameWidth?: number; nameColor?: string; nameFont?: string; nameEffect?: string; locked?: boolean }>(projectId!, FIRESTORE_COLLECTIONS.settings) : Promise.resolve([]),
-        ]);
-        if (cancelled) return;
-        setTables(cloudTables);
-        setGuests(cloudGuests);
-        setCheckins(cloudCheckins);
-        const templateSettings = cloudSettings.find((item) => item.id === 'template');
-        if (templateSettings) {
-          if (templateSettings.imageUrl) { setTemplateImage(templateSettings.imageUrl); window.localStorage.setItem('mes-invites-template-image', templateSettings.imageUrl); }
-          if (typeof templateSettings.nameX === 'number') setTemplateNameX(templateSettings.nameX);
-          if (typeof templateSettings.nameY === 'number') setTemplateNameY(templateSettings.nameY);
-          if (typeof templateSettings.qrX === 'number') setTemplateQrX(templateSettings.qrX);
-          if (typeof templateSettings.qrY === 'number') setTemplateQrY(templateSettings.qrY);
-          if (typeof templateSettings.qrSize === 'number') setTemplateQrSize(templateSettings.qrSize);
-          if (typeof templateSettings.nameSize === 'number') setTemplateNameSize(templateSettings.nameSize);
-          if (typeof templateSettings.nameWidth === 'number') setTemplateNameWidth(templateSettings.nameWidth);
-          if (typeof templateSettings.nameColor === 'string') setTemplateNameColor(templateSettings.nameColor);
-          if (typeof templateSettings.nameFont === 'string') setTemplateNameFont(templateSettings.nameFont);
-          if (typeof templateSettings.nameEffect === 'string') setTemplateNameEffect(templateSettings.nameEffect);
-          if (templateSettings.locked) setTemplateLocked(true);
-        }
-      } catch {
-        // Firestore remains locked until the authentication and rules phase.
-        // The local demo remains usable without exposing records publicly.
-      }
+    if (!firebaseConfigured || !authUser || accessState !== 'approved' || !projectId || !firestore) return;
+    const canReadTables = currentProfile?.role !== 'collaborator' || allowedMenus.includes('tables');
+    const canReadGuests = currentProfile?.role !== 'collaborator' || allowedMenus.includes('guests') || allowedMenus.includes('invitations');
+    const canReadCheckins = currentProfile?.role !== 'collaborator' || allowedMenus.includes('scanner') || allowedMenus.includes('history');
+    const canReadSettings = currentProfile?.role !== 'collaborator' || allowedMenus.includes('settings') || allowedMenus.includes('templates');
+    const unsubscribers: Array<() => void> = [];
+    const subscribe = <T,>(name: string, enabled: boolean, setter: (items: T[]) => void) => {
+      if (!enabled) { setter([]); return; }
+      unsubscribers.push(onSnapshot(collection(firestore, 'projects', projectId, name), (snapshot) => {
+        setter(snapshot.docs.map((item) => ({ ...item.data(), id: item.id }) as T));
+      }, (error) => {
+        console.error('Synchronisation Firestore impossible pour ' + name, error);
+        notify('La synchronisation en temps réel a échoué. Vérifie les règles Firestore.', 'error');
+      }));
     };
-    if (firebaseConfigured && authUser && (authUser.isAnonymous || authUser.emailVerified || currentProfile?.role === 'collaborator') && accessState === 'approved' && projectId) void loadCloudData();
-    return () => { cancelled = true; };
+    subscribe<GuestTable>(FIRESTORE_COLLECTIONS.tables, canReadTables, setTables);
+    subscribe<Guest>(FIRESTORE_COLLECTIONS.guests, canReadGuests, setGuests);
+    subscribe<Checkin>(FIRESTORE_COLLECTIONS.checkins, canReadCheckins, setCheckins);
+    if (canReadSettings) {
+      unsubscribers.push(onSnapshot(collection(firestore, 'projects', projectId, FIRESTORE_COLLECTIONS.settings), (snapshot) => {
+        const templateSettings = snapshot.docs.map((item) => ({ ...item.data(), id: item.id })).find((item) => item.id === 'template') as {
+          id: string; imageUrl?: string; nameX?: number; nameY?: number; qrX?: number; qrY?: number;
+          qrSize?: number; nameSize?: number; nameWidth?: number; nameColor?: string;
+          nameFont?: string; nameEffect?: string; locked?: boolean;
+        } | undefined;
+        if (!templateSettings) { setTemplateSettingsReady(true); return; }
+        if (typeof templateSettings.imageUrl === 'string' && templateSettings.imageUrl !== templateImage) {
+          setTemplateImage(templateSettings.imageUrl);
+          try { window.localStorage.setItem('mes-invites-template-image', templateSettings.imageUrl); } catch { /* Optional cache. */ }
+        }
+        if (typeof templateSettings.nameX === 'number') setTemplateNameX(templateSettings.nameX);
+        if (typeof templateSettings.nameY === 'number') setTemplateNameY(templateSettings.nameY);
+        if (typeof templateSettings.qrX === 'number') setTemplateQrX(templateSettings.qrX);
+        if (typeof templateSettings.qrY === 'number') setTemplateQrY(templateSettings.qrY);
+        if (typeof templateSettings.qrSize === 'number') setTemplateQrSize(templateSettings.qrSize);
+        if (typeof templateSettings.nameSize === 'number') setTemplateNameSize(templateSettings.nameSize);
+        if (typeof templateSettings.nameWidth === 'number') setTemplateNameWidth(templateSettings.nameWidth);
+        if (typeof templateSettings.nameColor === 'string') setTemplateNameColor(templateSettings.nameColor);
+        if (typeof templateSettings.nameFont === 'string') setTemplateNameFont(templateSettings.nameFont);
+        if (typeof templateSettings.nameEffect === 'string') setTemplateNameEffect(templateSettings.nameEffect);
+        if (typeof templateSettings.locked === 'boolean') setTemplateLocked(templateSettings.locked);
+        setTemplateSettingsReady(true);
+      }, (error) => {
+        console.error('Synchronisation des paramètres du modèle impossible', error);
+        setTemplateSettingsReady(true);
+        notify('Impossible de synchroniser les paramètres du modèle.', 'error');
+      }));
+    } else {
+      setTemplateSettingsReady(false);
+    }
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, [authUser, accessState, projectId, currentProfile, allowedMenus.join('|')]);
+
+  useEffect(() => {
+    if (!firebaseConfigured || !firestore || !projectId || accessState !== 'approved' || !templateSettingsReady) return;
+    const timeout = window.setTimeout(() => {
+      void setDoc(doc(firestore, 'projects', projectId, FIRESTORE_COLLECTIONS.settings, 'template'), {
+        id: 'template', imageUrl: templateImage, nameX: templateNameX, nameY: templateNameY,
+        qrX: templateQrX, qrY: templateQrY, qrSize: templateQrSize, nameSize: templateNameSize,
+        nameWidth: templateNameWidth, nameColor: templateNameColor, nameFont: templateNameFont,
+        nameEffect: templateNameEffect, locked: templateLocked,
+        updatedAt: new Date().toISOString(), updatedBy: authUser?.uid ?? null,
+      }, { merge: true }).catch((error) => {
+        console.error('Enregistrement des paramètres du modèle impossible', error);
+        notify('Les paramètres du modèle n’ont pas pu être synchronisés.', 'error');
+      });
+    }, 350);
+    return () => window.clearTimeout(timeout);
+  }, [projectId, accessState, templateSettingsReady, templateImage, templateNameX, templateNameY, templateQrX, templateQrY, templateQrSize, templateNameSize, templateNameWidth, templateNameColor, templateNameFont, templateNameEffect, templateLocked, authUser?.uid]);
 
   useEffect(() => {
     if (!toast) return;
