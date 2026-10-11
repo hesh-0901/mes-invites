@@ -201,7 +201,7 @@ export default function App() {
     setTemplateSettingsReady(false);
     setTemplateSettingsProjectId(null);
     const canReadTables = currentProfile?.role !== 'collaborator' || allowedMenus.includes('tables');
-    const canReadGuests = currentProfile?.role !== 'collaborator' || allowedMenus.includes('guests') || allowedMenus.includes('invitations');
+    const canReadGuests = currentProfile?.role !== 'collaborator' || allowedMenus.includes('guests') || allowedMenus.includes('invitations') || allowedMenus.includes('scanner');
     const canReadCheckins = currentProfile?.role !== 'collaborator' || allowedMenus.includes('scanner') || allowedMenus.includes('history');
     // Tous les membres approuvés doivent lire le modèle partagé pour afficher/télécharger les invitations.
     const canReadSettings = true;
