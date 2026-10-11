@@ -138,7 +138,6 @@ export default function App() {
   const [historyTableFilter, setHistoryTableFilter] = useState('all');
   const [historyNameFilter, setHistoryNameFilter] = useState('');
   const [historyOperatorFilter, setHistoryOperatorFilter] = useState('all');
-  const [guestNameFilter, setGuestNameFilter] = useState('');
   const [toast, setToast] = useState<Toast | null>(null);
   const [tableModal, setTableModal] = useState(false);
   const [editingTable, setEditingTable] = useState<GuestTable | null>(null);
