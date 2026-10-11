@@ -218,9 +218,43 @@ service cloud.firestore {
         );
     }
 
+    function validAcceptedCheckinCreate(projectId, checkinId) {
+      return request.resource.data.result == 'accepted'
+        && request.resource.data.guestId is string
+        && request.resource.data.guestId.size() > 0
+        && request.resource.data.timestamp is string
+        && request.resource.data.guestName is string
+        && request.resource.data.tableName is string
+        && request.resource.data.operator is string
+        && getAfter(/databases/$(database)/documents/projects/$(projectId)/guests/$(request.resource.data.guestId)).data.checkinStatus == 'checked-in'
+        && getAfter(/databases/$(database)/documents/projects/$(projectId)/guests/$(request.resource.data.guestId)).data.lastCheckinId == checkinId
+        && getAfter(/databases/$(database)/documents/projects/$(projectId)/guests/$(request.resource.data.guestId)).data.checkedInAt == request.resource.data.timestamp;
+    }
+
+    function validGuestCheckinUpdate(projectId, guestId) {
+      return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['checkinStatus', 'checkedInAt', 'lastCheckinId'])
+        && request.resource.data.checkinStatus == 'checked-in'
+        && request.resource.data.checkedInAt is string
+        && request.resource.data.lastCheckinId is string
+        && getAfter(/databases/$(database)/documents/projects/$(projectId)/checkins/$(request.resource.data.lastCheckinId)).data.guestId == guestId
+        && getAfter(/databases/$(database)/documents/projects/$(projectId)/checkins/$(request.resource.data.lastCheckinId)).data.result == 'accepted'
+        && getAfter(/databases/$(database)/documents/projects/$(projectId)/checkins/$(request.resource.data.lastCheckinId)).data.timestamp == request.resource.data.checkedInAt;
+    }
+
     match /projects/{projectId}/{collectionName}/{documentId} {
       allow read: if canReadProjectCollection(projectId, collectionName);
-      allow create, update, delete: if canWriteProjectCollection(projectId, collectionName);
+      allow create: if canWriteProjectCollection(projectId, collectionName)
+        && (collectionName != 'guests' || request.resource.data.checkinStatus != 'checked-in')
+        && (collectionName != 'checkins'
+          || request.resource.data.result != 'accepted'
+          || validAcceptedCheckinCreate(projectId, documentId));
+      allow update: if canWriteProjectCollection(projectId, collectionName)
+        && (collectionName != 'guests'
+          || !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['checkinStatus', 'checkedInAt', 'lastCheckinId'])
+          || validGuestCheckinUpdate(projectId, documentId));
+      allow delete: if canWriteProjectCollection(projectId, collectionName);
     }
 
     // Legacy unscoped collections remain blocked until project-scoped migration.
