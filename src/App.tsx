@@ -49,14 +49,6 @@ function statusLabel(status: Guest['invitationStatus'] | Guest['checkinStatus'])
 function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
 }
-function makeShortCode(existingGuests: Guest[]) {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  do {
-    code = Array.from({ length: 4 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
-  } while (existingGuests.some((guest) => guest.shortCode === code));
-  return code;
-}
 
 export default function App() {
   const [authUser, setAuthUser] = useState<User | null>(null);
@@ -398,12 +390,7 @@ export default function App() {
     }
     const guest = guests.find((item) => item.id === guestId);
     if (!guest) return;
-    const updated = {
-      ...guest,
-      invitationStatus: 'generated' as const,
-      token: guest.token ?? `MESINVITES-${globalThis.crypto?.randomUUID?.() ?? makeId('invite')}`,
-      shortCode: guest.shortCode ?? makeShortCode(guests),
-    };
+    const updated = { ...guest, invitationStatus: 'generated' as const, token: guest.token ?? `MESINVITES-${globalThis.crypto?.randomUUID?.() ?? makeId('invite')}` };
     setGuests((current) => current.map((item) => item.id === guestId ? updated : item));
     void saveGuestRecord(projectId!, updated).catch(() => undefined);
     setDetailGuest(updated);
@@ -413,11 +400,7 @@ export default function App() {
   const validateScan = useCallback((raw: string) => {
     const code = raw.trim();
     if (!code) return;
-    const normalizedCode = code.toUpperCase();
-    const guest = guestsRef.current.find((item) =>
-      item.token === code || item.id === code || item.shortCode === normalizedCode ||
-      (item.shortCode && normalizedCode === `INV-2026-${item.shortCode}`)
-    );
+    const guest = guestsRef.current.find((item) => item.token === code || item.id === code);
     if (!guest || guest.invitationStatus !== 'generated') {
       setScanResult({ state: 'invalid', message: 'Invitation inconnue, non générée ou désactivée.' });
       setScanValue(code);
@@ -495,21 +478,8 @@ export default function App() {
   };
 
   const downloadDemoInvitation = async (guest: Guest) => {
-    if (!templateImage) {
-      notify('Importe un template avant le téléchargement.', 'error');
-      return;
-    }
-    const shortCode = guest.shortCode;
-    if (!shortCode) {
-      const updated = { ...guest, shortCode: makeShortCode(guests) };
-      setGuests((current) => current.map((item) => item.id === guest.id ? updated : item));
-      void saveGuestRecord(projectId!, updated).catch(() => undefined);
-      setDetailGuest(updated);
-      notify('Identifiant court créé. Relance le téléchargement.', 'info');
-      return;
-    }
-    if (!guest.token) {
-      notify('Génère d’abord le QR code de cette invitation.', 'error');
+    if (!guest.token || !templateImage) {
+      notify('Génère le QR code et importe un template avant le téléchargement.', 'error');
       return;
     }
     try {
@@ -547,7 +517,7 @@ export default function App() {
       }
       ctx.fillText(guest.displayName, width * templateNameX / 100, height * templateNameY / 100, width * templateNameWidth / 100);
       ctx.shadowBlur = 0;
-      const qrSvg = renderToStaticMarkup(<QRCodeSVG value={shortCode} size={512} level="H" includeMargin />);
+      const qrSvg = renderToStaticMarkup(<QRCodeSVG value={guest.token} size={512} level="H" includeMargin />);
       // SVG images loaded by Image() need an explicit SVG namespace in some browsers.
       const compatibleQrSvg = qrSvg.includes('xmlns="http://www.w3.org/2000/svg"')
         ? qrSvg
@@ -563,35 +533,10 @@ export default function App() {
           qrImage.onload = () => resolve();
           qrImage.onerror = () => reject(new Error('Le navigateur ne parvient pas à lire le QR code SVG. Réessaie après actualisation de la page.'));
         });
-        const blockWidth = width * 0.18;
-        const blockHeight = height * 0.127;
-        const blockX = width * templateQrX / 100 - blockWidth / 2;
-        const blockY = height * templateQrY / 100 - blockHeight / 2;
-        const radius = Math.min(blockWidth, blockHeight) * 0.08;
+        const qrSize = width * templateQrSize / 100;
         ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.moveTo(blockX + radius, blockY);
-        ctx.arcTo(blockX + blockWidth, blockY, blockX + blockWidth, blockY + blockHeight, radius);
-        ctx.arcTo(blockX + blockWidth, blockY + blockHeight, blockX, blockY + blockHeight, radius);
-        ctx.arcTo(blockX, blockY + blockHeight, blockX, blockY, radius);
-        ctx.arcTo(blockX, blockY, blockX + blockWidth, blockY, radius);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.save();
-        ctx.fillStyle = '#1A1A1A';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = `700 ${Math.max(14, width * 0.015)}px "Roboto Mono", "Courier New", monospace`;
-        ctx.fillText(shortCode, blockX + blockWidth / 2, blockY + blockHeight * 0.19);
-
-        const qrSize = Math.min(blockWidth * 0.72, blockHeight * 0.72);
-        const qrX = blockX + (blockWidth - qrSize) / 2;
-        const qrY = blockY + blockHeight * 0.29;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(qrX, qrY, qrSize, qrSize);
-        ctx.drawImage(qrImage, qrX, qrY, qrSize, qrSize);
-        ctx.restore();
+        ctx.fillRect(width * templateQrX / 100 - qrSize / 2, height * templateQrY / 100 - qrSize / 2, qrSize, qrSize);
+        ctx.drawImage(qrImage, width * templateQrX / 100 - qrSize / 2, height * templateQrY / 100 - qrSize / 2, qrSize, qrSize);
       } finally {
         URL.revokeObjectURL(qrUrl);
       }
@@ -1086,7 +1031,7 @@ export default function App() {
       {deleteConfirmation && <Modal title={deleteConfirmation.type === 'table' ? (deleteConfirmation.stage === 1 ? "Supprimer cette table ?" : "Confirmer la suppression de la table") : (deleteConfirmation.stage === 1 ? "Supprimer cet invité ?" : "Confirmer la suppression de l’invité")} description={deleteConfirmation.type === 'table' ? (deleteConfirmation.stage === 1 ? "Vérifie la table concernée avant de continuer." : "Dernière étape : cette table sera retirée de ton événement.") : (deleteConfirmation.stage === 1 ? "Vérifie l’invité concerné avant de continuer." : "Dernière étape : cette fiche invité sera supprimée.")} onClose={() => setDeleteConfirmation(null)}><div className="delete-confirm-content"><span className="delete-confirm-icon"><AlertTriangle size={25} /></span><h3>{deleteConfirmation.stage === 1 ? (deleteConfirmation.type === 'table' ? "Veux-tu vraiment supprimer cette table ?" : "Veux-tu vraiment supprimer cet invité ?") : (deleteConfirmation.type === 'table' ? "Confirmer la suppression définitive de cette table ?" : "Confirmer la suppression définitive de cet invité ?")}</h3><p className="delete-confirm-item-name">{deleteConfirmation.type === 'table' ? deleteConfirmation.item.name : deleteConfirmation.item.displayName}</p><p className="delete-confirm-warning">{deleteConfirmation.stage === 1 ? (deleteConfirmation.type === 'table' ? "La suppression n’a pas encore eu lieu. Une deuxième confirmation sera demandée." : "La suppression n’a pas encore eu lieu. Une deuxième confirmation sera demandée.") : (deleteConfirmation.type === 'table' ? "Cette action est définitive. La table ne pourra pas être récupérée." : "Cette action est définitive. La fiche invité ne pourra pas être récupérée.")}</p><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setDeleteConfirmation(null)}>Annuler</button><button type="button" className="button button-danger-ghost" onClick={advanceDeleteConfirmation}><Trash2 size={16} /> {deleteConfirmation.stage === 1 ? "Oui, continuer" : "Supprimer définitivement"}</button></div></div></Modal>}
       {tableModal && <Modal title="Créer une table" description="Définissez un nom clair pour retrouver facilement les invités." onClose={() => setTableModal(false)}><form onSubmit={saveTable} className="form-stack"><label>Nom ou numéro de table<input autoFocus value={newTableName} onChange={(event) => setNewTableName(event.target.value)} placeholder="Ex. Table 03" required /></label><label>Description <span className="optional-label">Facultatif</span><input value={newTableDescription} onChange={(event) => setNewTableDescription(event.target.value)} placeholder="Ex. Famille et proches" /></label><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setTableModal(false)}>Annuler</button><button type="submit" className="button button-primary"><Plus size={16} /> Créer la table</button></div></form></Modal>}
       {guestModal && <Modal title={editingGuest ? 'Modifier l’invité' : 'Ajouter un invité'} description={activeTable ? `Table sélectionnée : ${activeTable.name}` : 'L’invité doit être affecté à une table existante.'} onClose={() => setGuestModal(false)}><form onSubmit={saveGuest} className="form-stack"><label>Nom de l’invité ou des invités<input autoFocus value={guestName} onChange={(event) => setGuestName(event.target.value)} placeholder={kind === 'couple' ? 'Jean et Marie Mukendi' : 'Jean Mukendi'} required /></label><label>Type d’invitation<select value={kind} onChange={(event) => setKind(event.target.value as InvitationKind)}><option value="individual">Personne seule</option><option value="couple">Couple</option></select></label>{kind === 'individual' && <label>Civilité<select value={salutation} onChange={(event) => setSalutation(event.target.value as Salutation)}><option>Monsieur</option><option>Madame</option><option>Mademoiselle</option></select></label>}<div className="name-preview"><span>APERÇU DU NOM</span><strong>{guestName.trim() ? makeDisplayName(guestName, salutation, kind) : 'Le nom apparaîtra ici'}</strong></div><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setGuestModal(false)}>Annuler</button><button type="submit" className="button button-primary"><Check size={16} /> {editingGuest ? 'Enregistrer' : 'Ajouter l’invité'}</button></div></form></Modal>}
-      {detailGuest && <Modal title="Détail de l’invitation" description="Fiche invité, QR unique et invitation personnalisée." onClose={() => setDetailGuest(null)} wide><div className="detail-layout"><div className="detail-invite-preview" style={{ position: 'relative', overflow: 'hidden', padding: 0, background: templateImage ? 'transparent' : undefined, aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4', width: '100%', containerType: 'inline-size' }}>{templateImage ? <><img src={templateImage} alt="Template original de l’invitation" style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }} /><strong className="template-preview-name" style={{ position: 'absolute', left: `${templateNameX}%`, top: `${templateNameY}%`, transform: 'translate(-50%, -50%)', fontSize: `${(fitNameFontSize(detailGuest.displayName, templateImageDimensions?.width ?? 1000) / (templateImageDimensions?.width ?? 1000)) * 100}cqw`, maxWidth: `${templateNameWidth}%`, overflowWrap: 'anywhere', wordBreak: 'break-word', color: templateNameColor, fontFamily: templateNameFont, textShadow: templateNameEffect === 'shadow' ? '0 1px 3px #ffffffcc' : templateNameEffect === 'glow' ? `0 0 8px ${templateNameColor}` : 'none', WebkitTextStroke: templateNameEffect === 'outline' ? '0.6px white' : '0px transparent' }}>{detailGuest.displayName}</strong>{detailGuest.token && <div style={{ position: 'absolute', left: `${templateQrX}%`, top: `${templateQrY}%`, transform: 'translate(-50%, -50%)', width: '18%', height: '12.7%', padding: '1.2%', boxSizing: 'border-box', borderRadius: '8px', background: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3%', overflow: 'hidden' }}><strong style={{ fontFamily: '"Roboto Mono", monospace', fontSize: '7cqw', fontWeight: 700, color: '#1A1A1A', lineHeight: 1 }}>{detailGuest.shortCode ?? '----'}</strong><QRCodeSVG value={detailGuest.shortCode ?? detailGuest.token} size={256} level="H" includeMargin style={{ width: '78%', height: '78%' }} /></div>}</> : <div className="template-preview-empty"><FileImage size={28} /><strong>Aucun template importé</strong></div>}</div><div className="detail-meta"><div className="detail-meta-row"><span>Table</span><strong>{tables.find((table) => table.id === detailGuest.tableId)?.name ?? 'Table inconnue'}</strong></div><div className="detail-meta-row"><span>Type</span><strong>{detailGuest.kind === 'couple' ? 'Couple' : 'Personne seule'}</strong></div><div className="detail-meta-row"><span>Invitation</span><strong>{statusLabel(detailGuest.invitationStatus)}</strong></div><div className="detail-meta-row"><span>Entrée</span><strong>{statusLabel(detailGuest.checkinStatus)}</strong></div><div className="detail-meta-row"><span>Identifiant</span><code>{detailGuest.id}</code></div><div className="detail-actions">{(detailGuest.invitationStatus !== 'generated' || !detailGuest.shortCode) && <button className="button button-primary button-wide" onClick={() => generateInvitation(detailGuest.id)}><QrCode size={16} /> {detailGuest.shortCode ? 'Générer le QR code' : 'Créer l’identifiant et le QR code'}</button>}{detailGuest.token && detailGuest.shortCode && <button className="button button-secondary button-wide" onClick={() => void downloadDemoInvitation(detailGuest)}><Download size={16} /> Télécharger l’invitation (PNG)</button>}<button className="button button-secondary button-wide" onClick={() => { setDetailGuest(null); openAddGuest(detailGuest); }}><Pencil size={15} /> Modifier la fiche</button><button className="button button-danger-ghost button-wide" onClick={() => deleteGuest(detailGuest)}><Trash2 size={15} /> Supprimer l’invité</button><p className="muted-copy small-note">Le PNG téléchargé reprend le template et les positions enregistrées dans cet éditeur.</p></div></div></div></Modal>}
+      {detailGuest && <Modal title="Détail de l’invitation" description="Fiche invité, QR unique et invitation personnalisée." onClose={() => setDetailGuest(null)} wide><div className="detail-layout"><div className="detail-invite-preview" style={{ position: 'relative', overflow: 'hidden', padding: 0, background: templateImage ? 'transparent' : undefined, aspectRatio: templateImageDimensions ? `${templateImageDimensions.width} / ${templateImageDimensions.height}` : '3 / 4', width: '100%', containerType: 'inline-size' }}>{templateImage ? <><img src={templateImage} alt="Template original de l’invitation" style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }} /><strong className="template-preview-name" style={{ position: 'absolute', left: `${templateNameX}%`, top: `${templateNameY}%`, transform: 'translate(-50%, -50%)', fontSize: `${(fitNameFontSize(detailGuest.displayName, templateImageDimensions?.width ?? 1000) / (templateImageDimensions?.width ?? 1000)) * 100}cqw`, maxWidth: `${templateNameWidth}%`, overflowWrap: 'anywhere', wordBreak: 'break-word', color: templateNameColor, fontFamily: templateNameFont, textShadow: templateNameEffect === 'shadow' ? '0 1px 3px #ffffffcc' : templateNameEffect === 'glow' ? `0 0 8px ${templateNameColor}` : 'none', WebkitTextStroke: templateNameEffect === 'outline' ? '0.6px white' : '0px transparent' }}>{detailGuest.displayName}</strong>{detailGuest.token && <div className="template-preview-qr" style={{ position: 'absolute', left: `${templateQrX}%`, top: `${templateQrY}%`, width: `${templateQrSize}%`, transform: 'translate(-50%, -50%)' }}><QRCodeSVG value={detailGuest.token} size={256} level="H" includeMargin /></div>}</> : <div className="template-preview-empty"><FileImage size={28} /><strong>Aucun template importé</strong></div>}</div><div className="detail-meta"><div className="detail-meta-row"><span>Table</span><strong>{tables.find((table) => table.id === detailGuest.tableId)?.name ?? 'Table inconnue'}</strong></div><div className="detail-meta-row"><span>Type</span><strong>{detailGuest.kind === 'couple' ? 'Couple' : 'Personne seule'}</strong></div><div className="detail-meta-row"><span>Invitation</span><strong>{statusLabel(detailGuest.invitationStatus)}</strong></div><div className="detail-meta-row"><span>Entrée</span><strong>{statusLabel(detailGuest.checkinStatus)}</strong></div><div className="detail-meta-row"><span>Identifiant</span><code>{detailGuest.id}</code></div><div className="detail-actions">{detailGuest.invitationStatus !== 'generated' && <button className="button button-primary button-wide" onClick={() => generateInvitation(detailGuest.id)}><QrCode size={16} /> Générer le QR code</button>}{detailGuest.token && <button className="button button-secondary button-wide" onClick={() => void downloadDemoInvitation(detailGuest)}><Download size={16} /> Télécharger l’invitation (PNG)</button>}<button className="button button-secondary button-wide" onClick={() => { setDetailGuest(null); openAddGuest(detailGuest); }}><Pencil size={15} /> Modifier la fiche</button><button className="button button-danger-ghost button-wide" onClick={() => deleteGuest(detailGuest)}><Trash2 size={15} /> Supprimer l’invité</button><p className="muted-copy small-note">Le PNG téléchargé reprend le template et les positions enregistrées dans cet éditeur.</p></div></div></div></Modal>}
       {editingCollaborator && <Modal title="Modifier le collaborateur" description="Modifiez son nom affiché et son numéro de contact. Son identifiant de connexion reste inchangé." onClose={() => { if (!collaboratorSaving) setEditingCollaborator(null); }}>
         <form className="form-stack" onSubmit={(event) => { event.preventDefault(); void saveCollaboratorProfile(); }}>
           <label>Nom affiché<input autoFocus value={collaboratorDisplayName} onChange={(event) => setCollaboratorDisplayName(event.target.value)} required maxLength={100}/></label>
