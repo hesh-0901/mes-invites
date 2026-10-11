@@ -191,7 +191,9 @@ export default function App() {
     const canReadTables = currentProfile?.role !== 'collaborator' || allowedMenus.includes('tables');
     const canReadGuests = currentProfile?.role !== 'collaborator' || allowedMenus.includes('guests') || allowedMenus.includes('invitations');
     const canReadCheckins = currentProfile?.role !== 'collaborator' || allowedMenus.includes('scanner') || allowedMenus.includes('history');
-    const canReadSettings = currentProfile?.role !== 'collaborator' || allowedMenus.includes('settings') || allowedMenus.includes('templates');
+    // Tous les membres approuvés doivent lire le modèle partagé pour afficher/télécharger les invitations.
+    const canReadSettings = true;
+    const canWriteTemplateSettings = currentProfile?.role !== 'collaborator' || allowedMenus.includes('settings') || allowedMenus.includes('templates');
     const unsubscribers: Array<() => void> = [];
     const subscribe = <T,>(name: string, enabled: boolean, setter: (items: T[]) => void) => {
       if (!enabled) { setter([]); return; }
@@ -244,7 +246,7 @@ export default function App() {
   }, [authUser, accessState, projectId, currentProfile, allowedMenus.join('|')]);
 
   useEffect(() => {
-    if (!firebaseConfigured || !firestore || !projectId || accessState !== 'approved' || !templateSettingsReady || templateSettingsProjectId !== projectId) return;
+    if (!firebaseConfigured || !firestore || !projectId || accessState !== 'approved' || !templateSettingsReady || templateSettingsProjectId !== projectId || !canWriteTemplateSettings) return;
     const timeout = window.setTimeout(() => {
       void setDoc(doc(firestore, 'projects', projectId, FIRESTORE_COLLECTIONS.settings, 'template'), {
         id: 'template', imageUrl: templateImage, nameX: templateNameX, nameY: templateNameY,
@@ -258,7 +260,7 @@ export default function App() {
       });
     }, 350);
     return () => window.clearTimeout(timeout);
-  }, [projectId, accessState, templateSettingsReady, templateSettingsProjectId, templateImage, templateNameX, templateNameY, templateQrX, templateQrY, templateQrSize, templateNameSize, templateNameWidth, templateNameColor, templateNameFont, templateNameEffect, templateLocked, authUser?.uid]);
+  }, [projectId, accessState, templateSettingsReady, templateSettingsProjectId, canWriteTemplateSettings, templateImage, templateNameX, templateNameY, templateQrX, templateQrY, templateQrSize, templateNameSize, templateNameWidth, templateNameColor, templateNameFont, templateNameEffect, templateLocked, authUser?.uid]);
 
   useEffect(() => {
     if (!toast) return;
