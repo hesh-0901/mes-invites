@@ -554,7 +554,7 @@ export default function App() {
       link.href = url;
       const fileGuestName = guest.name
         .normalize('NFD')
-        .replace(/[\\u0300-\\u036f]/g, '')
+        .replace(/[\u0300-\u036f]/g, '')
         .trim()
         .replace(/[^a-zA-Z0-9]+/g, '_')
         .replace(/^_+|_+$/g, '');
