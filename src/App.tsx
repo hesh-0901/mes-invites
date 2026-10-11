@@ -982,7 +982,7 @@ export default function App() {
     setResettingProjects(true);
     try {
       const projectsSnapshot = await getDocs(collection(firestore, 'projects'));
-      const subcollections = ['tables', 'guests', 'checkins', 'eventSettings'];
+      const subcollections = ['tables', 'guests', 'checkins', 'eventSettings', 'templates'];
       let deletedCount = 0;
       for (const project of projectsSnapshot.docs) {
         for (const subcollectionName of subcollections) {
