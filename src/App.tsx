@@ -430,7 +430,6 @@ export default function App() {
     const cachedGuest = guestsRef.current.find((item) => item.token === code || item.id === code);
     const timestamp = new Date().toISOString();
     const entryId = makeId('checkin');
-    const tableName = tables.find((table) => table.id === cachedGuest?.tableId)?.name ?? '—';
 
     if (!cachedGuest) {
       const entry: Checkin = { id: entryId, guestId: '', guestName: 'Invitation inconnue', tableName: '—', result: 'invalid', timestamp, operator: authUser.displayName || authUser.email || 'Accueil' };
