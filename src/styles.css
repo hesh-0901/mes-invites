@@ -1048,3 +1048,13 @@ tbody td>strong{font-weight:600;color:#453c41}
  .permission-modal-footer .button{width:100%}
 }
 @media(prefers-reduced-motion:reduce){.access-spin,.access-skeleton-row,.permission-modal{animation:none!important;transition:none!important}}
+
+
+/* Actions de gestion des collaborateurs */
+.access-collaborator-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+.access-edit-button,.access-remove-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:0 10px;border:1px solid var(--border,#e7e5e4);border-radius:9px;background:#fff;color:#44403c;font:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.access-edit-button:hover{background:#fafaf9;border-color:#d6d3d1}
+.access-remove-button{width:36px;padding:0;color:#b4233c;border-color:#f1d6dc}
+.access-remove-button:hover{background:#fff1f2;border-color:#e9b6c0}
+.access-edit-button:disabled,.access-remove-button:disabled{opacity:.55;cursor:wait}
+@media(max-width:700px){.access-collaborator-actions{grid-column:1/-1;justify-content:flex-start;margin-top:10px}.access-collaborator-card{flex-wrap:wrap}.access-edit-button,.access-manage-button{min-height:38px}}
