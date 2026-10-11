@@ -60,7 +60,7 @@ service cloud.firestore {
         );
     }
 
-    function canAccessProjectCollection(projectId, collectionName) {
+    function canReadProjectCollection(projectId, collectionName) {
       return isSuperAdmin()
         || isProjectAdmin(projectId)
         || (
@@ -71,7 +71,27 @@ service cloud.firestore {
               && (collaboratorHasMenu('guests') || collaboratorHasMenu('invitations')))
             || (collectionName == 'checkins'
               && (collaboratorHasMenu('scanner') || collaboratorHasMenu('history')))
-            || (collectionName == 'eventSettings' && (collaboratorHasMenu('settings') || collaboratorHasMenu('templates')))
+            // Les paramètres communs sont lisibles par tout collaborateur approuvé,
+            // notamment pour prévisualiser et télécharger une invitation.
+            || collectionName == 'eventSettings'
+            || (collectionName == 'templates' && collaboratorHasMenu('templates'))
+          )
+        );
+    }
+
+    function canWriteProjectCollection(projectId, collectionName) {
+      return isSuperAdmin()
+        || isProjectAdmin(projectId)
+        || (
+          isApprovedProjectMember(projectId)
+          && (
+            (collectionName == 'tables' && collaboratorHasMenu('tables'))
+            || (collectionName == 'guests'
+              && (collaboratorHasMenu('guests') || collaboratorHasMenu('invitations')))
+            || (collectionName == 'checkins'
+              && (collaboratorHasMenu('scanner') || collaboratorHasMenu('history')))
+            || (collectionName == 'eventSettings'
+              && (collaboratorHasMenu('settings') || collaboratorHasMenu('templates')))
             || (collectionName == 'templates' && collaboratorHasMenu('templates'))
           )
         );
@@ -199,7 +219,8 @@ service cloud.firestore {
     }
 
     match /projects/{projectId}/{collectionName}/{documentId} {
-      allow read, create, update, delete: if canAccessProjectCollection(projectId, collectionName);
+      allow read: if canReadProjectCollection(projectId, collectionName);
+      allow create, update, delete: if canWriteProjectCollection(projectId, collectionName);
     }
 
     // Legacy unscoped collections remain blocked until project-scoped migration.
