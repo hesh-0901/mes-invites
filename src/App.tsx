@@ -139,6 +139,7 @@ export default function App() {
   const [historyNameFilter, setHistoryNameFilter] = useState('');
   const [historyOperatorFilter, setHistoryOperatorFilter] = useState('all');
   const [resettingProjects, setResettingProjects] = useState(false);
+  const [resettingCheckinId, setResettingCheckinId] = useState<string | null>(null);
   const [resetProjects, setResetProjects] = useState<Array<{ id: string; ownerUid?: string; ownerName?: string; name?: string; status?: string }>>([]);
   const [resetProjectId, setResetProjectId] = useState('');
   const [resetProjectsLoading, setResetProjectsLoading] = useState(false);
@@ -963,6 +964,31 @@ export default function App() {
     </>
   );
 
+  const resetHistoryEntry = async (entry: Checkin) => {
+    if (!firestore || !projectId || resettingCheckinId) return;
+    const confirmed = window.confirm(`Réinitialiser cette entrée pour « ${entry.guestName} » ? L’enregistrement sera retiré de l’historique et, si cette entrée avait validé l’accès, l’invitation sera de nouveau marquée comme non utilisée.`);
+    if (!confirmed) return;
+    setResettingCheckinId(entry.id);
+    try {
+      if (entry.result === 'accepted' || entry.result === 'already-used') {
+        const guest = guests.find((item) => item.id === entry.guestId);
+        if (guest && guest.lastCheckinId === entry.id) {
+          const updatedGuest: Guest = { ...guest, checkinStatus: 'not-checked-in', checkedInAt: undefined, lastCheckinId: undefined };
+          await saveGuestRecord(projectId, updatedGuest);
+          setGuests((items) => items.map((item) => item.id === guest.id ? updatedGuest : item));
+        }
+      }
+      await deleteRecord(projectId, FIRESTORE_COLLECTIONS.checkins, entry.id);
+      setCheckins((items) => items.filter((item) => item.id !== entry.id));
+      notify(`Entrée de « ${entry.guestName} » réinitialisée.`, 'success');
+    } catch (error) {
+      console.error('Réinitialisation de l’entrée impossible', error);
+      notify('Impossible de réinitialiser cette entrée. Vérifie les droits Firestore.', 'error');
+    } finally {
+      setResettingCheckinId(null);
+    }
+  };
+
   const renderHistory = () => (
     <>
       <section className="welcome-row"><div><div className="eyebrow">TRAÇABILITÉ</div><h2>Historique des entrées</h2><p>Consultez les contrôles effectués pendant l’accueil.</p></div><button className="button button-secondary" onClick={() => notify('L’export sera activé avec les données persistées.', 'info')}><Download size={16} /> Exporter</button></section>
@@ -971,7 +997,7 @@ export default function App() {
           <th><div className="filter-heading"><span>Table</span><select className={`column-filter-select icon-only-filter ${historyTableFilter !== 'all' ? 'filter-active' : ''}`} aria-label="Filtrer l’historique par table" value={historyTableFilter} onChange={(event) => setHistoryTableFilter(event.target.value)}><option value="all">Toutes</option>{Array.from(new Set(checkins.map((entry) => entry.tableName))).filter(Boolean).map((name) => <option key={name} value={name}>{name}</option>)}</select></div></th>
           <th><div className="filter-heading"><span>Date et heure</span></div></th>
           <th><div className="filter-heading"><span>Résultat</span><select className={`column-filter-select icon-only-filter ${historyResultFilter !== 'all' ? 'filter-active' : ''}`} aria-label="Filtrer l’historique par résultat" value={historyResultFilter} onChange={(event) => setHistoryResultFilter(event.target.value)}><option value="all">Tous</option><option value="accepted">Acceptée</option><option value="already-used">Déjà utilisée</option><option value="invalid">Invalide</option></select></div></th>
-          <th><div className="filter-heading"><span>Opérateur</span><select className={`column-filter-select icon-only-filter ${historyOperatorFilter !== 'all' ? 'filter-active' : ''}`} aria-label="Filtrer par opérateur" value={historyOperatorFilter} onChange={(event) => setHistoryOperatorFilter(event.target.value)}><option value="all">Tous</option>{Array.from(new Set(checkins.map((entry) => entry.operator))).filter(Boolean).map((name) => <option key={name} value={name}>{name}</option>)}</select></div></th></tr></thead><tbody>{visibleHistoryRows.map((entry, index) => <tr key={entry.id}><td className="row-number">{index + 1}.</td><td><strong>{entry.guestName}</strong></td><td>{entry.tableName}</td><td>{formatDate(entry.timestamp)}</td><td><span className={`status-pill ${entry.result === 'accepted' ? 'status-green' : entry.result === 'invalid' ? 'status-red' : 'status-amber'}`}><span className="status-dot" />{entry.result === 'accepted' ? 'Entrée acceptée' : entry.result === 'already-used' ? 'Déjà utilisée' : 'Invalide'}</span></td><td>{entry.operator}</td></tr>)}</tbody></table>{checkins.length === 0 && <div className="empty-state"><ClipboardList size={28} /><strong>Aucune entrée</strong><span>Les scans apparaîtront ici.</span></div>}</div></section>
+          <th><div className="filter-heading"><span>Opérateur</span><select className={`column-filter-select icon-only-filter ${historyOperatorFilter !== 'all' ? 'filter-active' : ''}`} aria-label="Filtrer par opérateur" value={historyOperatorFilter} onChange={(event) => setHistoryOperatorFilter(event.target.value)}><option value="all">Tous</option>{Array.from(new Set(checkins.map((entry) => entry.operator))).filter(Boolean).map((name) => <option key={name} value={name}>{name}</option>)}</select></div></th><th>Action</th></tr></thead><tbody>{visibleHistoryRows.map((entry, index) => <tr key={entry.id}><td className="row-number">{index + 1}.</td><td><strong>{entry.guestName}</strong></td><td>{entry.tableName}</td><td>{formatDate(entry.timestamp)}</td><td><span className={`status-pill ${entry.result === 'accepted' ? 'status-green' : entry.result === 'invalid' ? 'status-red' : 'status-amber'}`}><span className="status-dot" />{entry.result === 'accepted' ? 'Entrée acceptée' : entry.result === 'already-used' ? 'Déjà utilisée' : 'Invalide'}</span></td><td>{entry.operator}</td><td><button type="button" className="button button-danger-ghost history-reset-button" disabled={resettingCheckinId !== null} onClick={() => void resetHistoryEntry(entry)}>{resettingCheckinId === entry.id ? <LoaderCircle size={14} className="access-spin"/> : <RefreshCw size={14}/>} Réinitialiser</button></td></tr>)}</tbody></table>{checkins.length === 0 && <div className="empty-state"><ClipboardList size={28} /><strong>Aucune entrée</strong><span>Les scans apparaîtront ici.</span></div>}</div></section>
     </>
   );
 
